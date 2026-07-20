@@ -1,0 +1,40 @@
+version: 1
+name: telecom-case-v-graph-benchmark
+
+target_project:
+  name: telecom-ops-platform
+  slug: telecom
+  source:
+    repository_url: https://github.com/tppioneer/Gitnexus-case-project.git
+    browser_url: https://github.com/tppioneer/Gitnexus-case-project/tree/telecom-ops-platform
+    branch: telecom-ops-platform
+    reference_commit: 5c2fdcdf9e3b7829fc8ace183e2b0876ccbb188a
+  graph_repositories:
+    gitnexus: telecom
+    aka: telecom
+  path: F:/develop/codes/Gitnexus-case-project/telecom-ops-platform
+  language: java
+  build_tool: maven
+  validation_commands:
+    - C:/maven/apache-maven-3.9.8/bin/mvn.cmd test
+
+provider_profiles: ../graph-providers.yaml
+
+cases:
+  - id: telecom-case-v-workorder-notification-flow
+    file: ../cases/telecom/case-v/case.yaml
+    ground_truth: ../cases/telecom/case-v/ground-truth.yaml
+    task_type: flow_tracing
+    modification_case: false
+
+run_matrix:
+  agents:
+    - claude-code
+  tool_policies:
+    - grep
+    - graph
+  graph_providers:
+    - gitnexus
+    - aka
+  repeats_per_cell: 3
+  total_required_runs: 9

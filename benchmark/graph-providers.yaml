@@ -1,0 +1,29 @@
+version: 1
+
+providers:
+  gitnexus:
+    display_name: GitNexus
+    mcp_server: gitnexus
+    tool_prefixes:
+      - mcp__gitnexus__
+    allowed_tools:
+      - mcp__gitnexus__query
+      - mcp__gitnexus__context
+      - mcp__gitnexus__impact
+      - mcp__gitnexus__list_repos
+      - mcp__gitnexus__cypher
+      - mcp__gitnexus__trace
+    discovery_tools:
+      - mcp__gitnexus__query
+      - mcp__gitnexus__context
+      - mcp__gitnexus__impact
+
+  aka:
+    display_name: Aka
+    mcp_server: aka
+    tool_prefixes:
+      - mcp__aka__
+    allowed_tools:
+      - mcp__aka__*
+    discovery_tools:
+      - Use an Aka MCP graph search or context tool exposed by the configured server.

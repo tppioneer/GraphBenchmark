@@ -1,0 +1,52 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "GraphBenchmark run result",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["case_id", "run_id", "agent", "tool_policy", "graph_provider", "graph_repository", "policy_enforced", "started_at", "ended_at", "status", "final_answer", "evidence", "metrics", "violations"],
+  "properties": {
+    "case_id": {"type": "string"},
+    "run_id": {"type": "string"},
+    "agent": {"enum": ["claude-code"]},
+    "agent_model": {"type": "string"},
+    "tool_policy": {"enum": ["grep", "graph"]},
+    "graph_provider": {"type": ["string", "null"]},
+    "graph_repository": {"type": ["string", "null"]},
+    "policy_enforced": {"type": "boolean"},
+    "target_repo": {"type": "string"},
+    "target_commit": {"type": "string"},
+    "started_at": {"type": "string"},
+    "ended_at": {"type": "string"},
+    "status": {"enum": ["passed", "failed", "partial", "invalid", "error"]},
+    "final_answer": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["summary"],
+      "properties": {
+        "summary": {"type": "string"},
+        "entrypoints": {"type": "array", "items": {"$ref": "#/$defs/evidenceRef"}},
+        "symbols": {"type": "array", "items": {"$ref": "#/$defs/evidenceRef"}},
+        "files": {"type": "array", "items": {"type": "string"}},
+        "call_chains": {"type": "array", "items": {"type": "array", "items": {"$ref": "#/$defs/evidenceRef"}}},
+        "data_flows": {"type": "array", "items": {"type": "array", "items": {"$ref": "#/$defs/evidenceRef"}}},
+        "risks": {"type": "array", "items": {"type": "string"}},
+        "recommended_tests": {"type": "array", "items": {"type": "string"}}
+      }
+    },
+    "evidence": {"type": "array", "items": {"$ref": "#/$defs/evidenceRef"}},
+    "tool_calls": {"type": "array", "items": {"type": "object"}},
+    "metrics": {"type": "object", "required": ["tool_call_count", "files_read_count"]},
+    "violations": {"type": "array", "items": {"type": "object"}}
+  },
+  "$defs": {
+    "evidenceRef": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "reason"],
+      "properties": {
+        "name": {"type": "string"}, "kind": {"type": "string"}, "file": {"type": "string"},
+        "symbol": {"type": "string"}, "line": {"type": "integer", "minimum": 0}, "reason": {"type": "string"}
+      }
+    }
+  }
+}

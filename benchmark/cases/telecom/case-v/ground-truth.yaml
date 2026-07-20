@@ -1,0 +1,84 @@
+case_id: telecom-case-v-workorder-notification-flow
+task_type: flow_tracing
+ground_truth_status: reviewed
+
+expected_entrypoints:
+  - id: entry.workorder-assign
+    symbol: WorkOrderFlowService.assign
+    file: workorder-service/src/main/java/com/example/telecom/workorder/service/WorkOrderFlowService.java
+
+expected_symbols:
+  - id: symbol.workorder-transition
+    symbol: WorkOrderStateMachine.transition
+    file: workorder-service/src/main/java/com/example/telecom/workorder/workflow/WorkOrderStateMachine.java
+  - id: symbol.workorder-event-publish
+    symbol: WorkOrderEventPublisher.publish
+    file: workorder-service/src/main/java/com/example/telecom/workorder/event/WorkOrderEventPublisher.java
+  - id: symbol.domain-event-publish
+    symbol: InMemoryDomainEventBus.publish
+    file: common-domain/src/main/java/com/example/telecom/common/event/InMemoryDomainEventBus.java
+  - id: symbol.workorder-event-consumer
+    symbol: WorkOrderEventConsumer.onWorkOrderChanged
+    file: notification-service/src/main/java/com/example/telecom/notification/consumer/WorkOrderEventConsumer.java
+  - id: symbol.notification-process
+    symbol: NotificationService.process
+    file: notification-service/src/main/java/com/example/telecom/notification/service/NotificationService.java
+  - id: symbol.notification-channel-resolve
+    symbol: NotificationChannelRegistry.resolve
+    file: notification-service/src/main/java/com/example/telecom/notification/channel/NotificationChannelRegistry.java
+  - id: symbol.notification-save
+    symbol: NotificationRepository.save
+    file: notification-service/src/main/java/com/example/telecom/notification/repository/NotificationRepository.java
+
+expected_edges:
+  - id: edge.assign-to-transition
+    from: WorkOrderFlowService.assign
+    to: WorkOrderStateMachine.transition
+    relation: calls
+  - id: edge.transition-to-save
+    from: WorkOrderStateMachine.transition
+    to: WorkOrderRepository.save
+    relation: followed_by
+  - id: edge.save-to-event-publisher
+    from: WorkOrderRepository.save
+    to: WorkOrderEventPublisher.publish
+    relation: followed_by
+  - id: edge.event-bus-to-consumer
+    from: InMemoryDomainEventBus.publish
+    to: WorkOrderEventConsumer.onWorkOrderChanged
+    relation: dispatches
+  - id: edge.consumer-to-notification
+    from: WorkOrderEventConsumer.onWorkOrderChanged
+    to: NotificationService.process
+    relation: calls
+  - id: edge.notification-to-registry
+    from: NotificationService.process
+    to: NotificationChannelRegistry.resolve
+    relation: calls
+  - id: edge.registry-to-send
+    from: NotificationChannelRegistry.resolve
+    to: NotificationChannel.send
+    relation: resolves
+  - id: edge.send-to-save
+    from: NotificationChannel.send
+    to: NotificationRepository.save
+    relation: followed_by
+
+expected_facts:
+  - id: fact.invalid-transition-before-event
+    description: Invalid state transitions fail before event publication.
+  - id: fact.channel-by-status
+    description: Channel is SMS for ESCALATED, EMAIL for CLOSED or RESOLVED, and WECOM otherwise.
+  - id: fact.no-primary-retry
+    description: Notification persistence records SendResult.success but the primary process does not invoke NotificationRetryService.
+  - id: fact.delivery-through-event-bus
+    description: Cross-module delivery is through DomainEventBus, not a direct WorkOrderFlowService to NotificationService call.
+
+noise_items:
+  - id: noise.notification-retry
+    symbol: NotificationRetryService.process
+  - id: noise.template-variable-registry
+    symbol: TemplateVariableRegistry.resolveVariables
+
+recommended_validation:
+  - C:/maven/apache-maven-3.9.8/bin/mvn.cmd -pl common-domain,workorder-service,notification-service test

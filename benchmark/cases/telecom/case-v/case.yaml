@@ -1,0 +1,15 @@
+id: telecom-case-v-workorder-notification-flow
+name: Telecom work-order event to notification flow
+level: L2
+task_type: flow_tracing
+repo: telecom
+status: reviewed
+
+prompt: |
+  工单状态发生变化后，系统应根据新状态选择通知渠道、发送消息并保存发送记录。
+  请从状态变更开始追踪到通知记录落库的完整执行流程，解释跨模块事件分发、模板渲染、渠道选择和发送结果如何衔接。
+  不要修改代码，只输出有证据支持的调用链、条件分支、失败风险和验证建议。
+
+private_review_note: |
+  不进入公开载荷：核对 WorkOrderFlowService/Publisher、DomainEventBus、WorkOrderEventConsumer、
+  NotificationService、TemplateService、ChannelRegistry 和 Repository。

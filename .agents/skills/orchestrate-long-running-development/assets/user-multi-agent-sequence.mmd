@@ -1,0 +1,66 @@
+sequenceDiagram
+    autonumber
+
+    actor User as 用户
+    participant Codex as Codex 总控
+    participant Artifacts as 设计文档 / 任务卡
+    participant Git as Git / 隔离 Worktree
+    box rgba(39, 66, 112, 0.28) 外部执行 Agent
+        participant Claude as Claude Code
+        participant OpenCode as OpenCode
+    end
+
+    User->>Codex: 提出长程开发目标与约束
+    Codex->>Artifacts: 建立设计基线、架构不变量和验收标准
+
+    opt 存在会改变架构的未决问题
+        Codex-->>User: 请求关键决策，不替用户猜测
+        User-->>Codex: 确认方案或补充约束
+        Codex->>Artifacts: 固化决定并更新设计基线
+    end
+
+    Codex->>Artifacts: 拆分可验收任务卡（DRAFT → READY）
+    Codex->>Git: 为任务创建分支与隔离 Worktree
+    Git-->>Codex: 返回绝对路径与完整 Base SHA
+    Codex->>Artifacts: 记录执行信封并标记 IMPLEMENTING
+
+    par 下发互不重叠的任务
+        Codex->>Claude: 冷启动提示词：任务卡路径、Base SHA、允许范围
+        Claude->>Git: 校验 HEAD，按任务卡实现、测试并提交
+        Claude-->>Codex: AGENT_RESULT + Head SHA + 验证证据
+    and
+        Codex->>OpenCode: 冷启动提示词：任务卡路径、Base SHA、允许范围
+        OpenCode->>Git: 校验 HEAD，按任务卡实现、测试并提交
+        OpenCode-->>Codex: AGENT_RESULT + Head SHA + 验证证据
+    end
+
+    Note over Claude,OpenCode: Agent 不继承 Codex 对话上下文<br/>仓库文件与完整 Git SHA 是交互协议
+
+    Codex->>Git: 校验提交血缘、真实 Diff、变更范围和测试结果
+    Git-->>Codex: 返回可复核的提交与差异证据
+    Codex->>Artifacts: 对照设计与验收标准独立审查
+
+    alt 存在可执行 Finding
+        Codex->>Artifacts: 记录稳定 Finding ID，标记 CHANGES_REQUIRED
+
+        loop 直到所有已接受 Finding 关闭
+            Codex->>Claude: 整改包：当前 SHA + Finding ID + 原任务范围
+            Claude->>Git: 仅修复指定 Finding，测试并提交
+            Claude-->>Codex: 新 Head SHA + 逐项解决说明 + 验证结果
+            Codex->>Git: 审查增量及相对原始 Base 的累计 Diff
+            Git-->>Codex: 返回新差异与检查证据
+            Codex->>Artifacts: 关闭已验证 Finding 或新增回归 Finding
+        end
+    else 审查通过
+        Codex->>Artifacts: 记录 PASS / PASS_WITH_NOTES
+    end
+
+    Codex->>Git: 执行最终验证与相关回归检查
+    Git-->>Codex: 所有要求的检查通过
+    Codex->>Artifacts: 标记 VERIFIED
+    Codex-->>User: 汇报提交、验收证据、剩余风险和集成状态
+
+    User-->>Codex: 确认集成
+    Codex->>Git: 合并或应用到目标分支
+    Codex->>Artifacts: 标记 INTEGRATED
+    Codex-->>User: 返回最终结果与可追溯记录

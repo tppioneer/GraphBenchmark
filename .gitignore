@@ -1,0 +1,64 @@
+# IDEs and editors
+.idea/
+.vscode/
+*.iml
+*.ipr
+*.iws
+*~
+*.swp
+*.swo
+
+# Operating system metadata
+.DS_Store
+Thumbs.db
+Desktop.ini
+
+# Python bytecode and tool caches
+__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.pytype/
+.hypothesis/
+
+# Python virtual environments
+.venv/
+venv/
+env/
+ENV/
+
+# Python packaging and build output
+build/
+dist/
+*.egg-info/
+.eggs/
+pip-wheel-metadata/
+
+# Test and coverage output
+.coverage
+.coverage.*
+htmlcov/
+coverage.xml
+.tox/
+.nox/
+
+# Node.js dependencies and build caches
+node_modules/
+.npm/
+.yarn/
+.pnpm-store/
+.cache/
+
+# Logs, temporary files, and local runtime state
+*.log
+*.tmp
+*.temp
+*.bak
+tmp/
+temp/
+
+# Local environment and secret-bearing configuration
+.env
+.env.*

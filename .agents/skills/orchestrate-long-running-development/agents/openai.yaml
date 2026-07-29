@@ -1,0 +1,4 @@
+interface:
+  display_name: "长程开发闭环"
+  short_description: "将设计文档转化为可验收的多代理开发、审查与整改闭环"
+  default_prompt: "使用 $orchestrate-long-running-development 将设计文档拆成可验收任务，并组织实现、审查和整改闭环。"

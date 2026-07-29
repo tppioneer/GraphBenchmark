@@ -1,0 +1,220 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1080" height="1440" viewBox="0 0 1080 1440" role="img" aria-labelledby="title desc">
+  <title id="title">长程任务设计 Skill 宣传海报</title>
+  <desc id="desc">展示从设计基线、任务卡、外部 Agent 执行、独立审查到验证集成的长程开发闭环。</desc>
+  <defs>
+    <linearGradient id="bg" x1="70" y1="20" x2="1010" y2="1420" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#111933"/>
+      <stop offset="0.46" stop-color="#081224"/>
+      <stop offset="1" stop-color="#050B16"/>
+    </linearGradient>
+    <linearGradient id="headline" x1="86" y1="180" x2="890" y2="330" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#FFFFFF"/>
+      <stop offset="0.52" stop-color="#DDE8FF"/>
+      <stop offset="1" stop-color="#82E9FF"/>
+    </linearGradient>
+    <linearGradient id="cyan" x1="0" y1="0" x2="1" y2="1">
+      <stop stop-color="#8CF6FF"/>
+      <stop offset="1" stop-color="#3C8BFF"/>
+    </linearGradient>
+    <linearGradient id="green" x1="0" y1="0" x2="1" y2="1">
+      <stop stop-color="#9BFFD8"/>
+      <stop offset="1" stop-color="#31D59A"/>
+    </linearGradient>
+    <linearGradient id="violet" x1="0" y1="0" x2="1" y2="1">
+      <stop stop-color="#C7B7FF"/>
+      <stop offset="1" stop-color="#7E68FF"/>
+    </linearGradient>
+    <radialGradient id="halo">
+      <stop stop-color="#4EDCFF" stop-opacity=".24"/>
+      <stop offset="1" stop-color="#4EDCFF" stop-opacity="0"/>
+    </radialGradient>
+    <pattern id="grid" width="42" height="42" patternUnits="userSpaceOnUse">
+      <path d="M42 0H0V42" fill="none" stroke="#A4C4FF" stroke-opacity=".055" stroke-width="1"/>
+      <circle cx="0" cy="0" r="1.6" fill="#A4C4FF" fill-opacity=".12"/>
+    </pattern>
+    <filter id="shadow" x="-30%" y="-30%" width="160%" height="160%">
+      <feDropShadow dx="0" dy="16" stdDeviation="24" flood-color="#000814" flood-opacity=".48"/>
+    </filter>
+    <filter id="glow" x="-80%" y="-80%" width="260%" height="260%">
+      <feGaussianBlur stdDeviation="9" result="blur"/>
+      <feMerge>
+        <feMergeNode in="blur"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+    <marker id="arrowCyan" markerWidth="10" markerHeight="10" refX="8" refY="5" orient="auto" markerUnits="strokeWidth">
+      <path d="M1 1L9 5L1 9" fill="none" stroke="#67DFFF" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/>
+    </marker>
+    <marker id="arrowGreen" markerWidth="10" markerHeight="10" refX="8" refY="5" orient="auto" markerUnits="strokeWidth">
+      <path d="M1 1L9 5L1 9" fill="none" stroke="#63E7B8" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/>
+    </marker>
+    <style>
+      .sans { font-family: "Microsoft YaHei", "PingFang SC", "Noto Sans CJK SC", "Source Han Sans SC", sans-serif; }
+      .mono { font-family: "Cascadia Code", "JetBrains Mono", "SFMono-Regular", Consolas, monospace; }
+      .muted { fill: #8FA4C8; }
+      .body { fill: #C4D1E9; }
+      .node-title { fill: #F5F8FF; font-size: 25px; font-weight: 700; letter-spacing: .5px; }
+      .node-copy { fill: #91A8CD; font-size: 16px; font-weight: 500; letter-spacing: .3px; }
+      .feature-title { fill: #F4F7FF; font-size: 21px; font-weight: 700; }
+      .feature-copy { fill: #92A7C8; font-size: 15px; font-weight: 500; }
+    </style>
+  </defs>
+
+  <rect width="1080" height="1440" fill="url(#bg)"/>
+  <rect width="1080" height="1440" fill="url(#grid)"/>
+  <circle cx="915" cy="160" r="330" fill="url(#halo)"/>
+  <circle cx="120" cy="1170" r="280" fill="url(#halo)" opacity=".55"/>
+  <path d="M0 424C247 320 406 454 614 373C807 298 912 185 1080 207" fill="none" stroke="#56DFFF" stroke-opacity=".08" stroke-width="2"/>
+  <path d="M0 458C250 352 414 490 629 406C820 331 935 217 1080 239" fill="none" stroke="#8A7DFF" stroke-opacity=".07" stroke-width="1"/>
+
+  <g class="sans">
+    <g transform="translate(76 68)">
+      <rect width="316" height="44" rx="22" fill="#132644" stroke="#4777B7" stroke-opacity=".64"/>
+      <circle cx="24" cy="22" r="5" fill="#61E2FF" filter="url(#glow)"/>
+      <text x="42" y="28" fill="#BBD1F4" font-size="14" font-weight="700" letter-spacing="2.2">CODEX · LONG-RUN WORKFLOW</text>
+    </g>
+    <text x="1000" y="97" text-anchor="end" fill="#7F94B6" font-size="14" font-weight="700" letter-spacing="2.4">SKILL / 01</text>
+
+    <text x="76" y="200" fill="url(#headline)" font-size="74" font-weight="800" letter-spacing="-2">让长程开发</text>
+    <text x="76" y="292" fill="url(#headline)" font-size="74" font-weight="800" letter-spacing="-2">变成可验证的闭环</text>
+    <text x="79" y="351" class="body" font-size="23" font-weight="500" letter-spacing=".5">
+      从设计文档到可信提交，持续拆解、执行、审查、整改与集成。
+    </text>
+
+    <g transform="translate(76 390)">
+      <rect width="713" height="42" rx="12" fill="#0D1A31" stroke="#314C78"/>
+      <text x="18" y="27" class="mono" fill="#81E6FF" font-size="16" font-weight="600">$ orchestrate-long-running-development</text>
+    </g>
+
+    <g filter="url(#shadow)">
+      <rect x="60" y="476" width="960" height="500" rx="34" fill="#0A1427" fill-opacity=".94" stroke="#38527B" stroke-opacity=".72"/>
+      <rect x="61" y="477" width="958" height="498" rx="33" fill="none" stroke="#78E8FF" stroke-opacity=".08"/>
+    </g>
+
+    <g transform="translate(92 508)">
+      <text x="0" y="21" fill="#7F95B9" font-size="14" font-weight="800" letter-spacing="2.3">CONTROL LOOP</text>
+      <g transform="translate(690 0)">
+        <rect width="205" height="34" rx="17" fill="#10283A" stroke="#2D806D"/>
+        <circle cx="19" cy="17" r="5" fill="#62E8B6"/>
+        <text x="35" y="22" fill="#A7F4D6" font-size="13" font-weight="700" letter-spacing="1.2">EVIDENCE-BASED</text>
+      </g>
+    </g>
+
+    <!-- Workflow connectors -->
+    <path d="M344 647H405" fill="none" stroke="#67DFFF" stroke-width="2.4" stroke-linecap="round" marker-end="url(#arrowCyan)"/>
+    <path d="M659 647H720" fill="none" stroke="#67DFFF" stroke-width="2.4" stroke-linecap="round" marker-end="url(#arrowCyan)"/>
+    <path d="M868 714V759" fill="none" stroke="#67DFFF" stroke-width="2.4" stroke-linecap="round" marker-end="url(#arrowCyan)"/>
+    <path d="M721 836H660" fill="none" stroke="#67DFFF" stroke-width="2.4" stroke-linecap="round" marker-end="url(#arrowCyan)"/>
+    <path d="M406 836H345" fill="none" stroke="#63E7B8" stroke-width="2.4" stroke-linecap="round" marker-end="url(#arrowGreen)"/>
+    <path d="M535 903C535 946 868 951 868 881" fill="none" stroke="#8E7CFF" stroke-opacity=".78" stroke-width="2" stroke-dasharray="7 8" marker-end="url(#arrowCyan)"/>
+
+    <!-- Node 01 -->
+    <g transform="translate(92 575)">
+      <rect width="252" height="139" rx="22" fill="#101D34" stroke="#3A5E8D"/>
+      <rect x="16" y="15" width="46" height="28" rx="14" fill="#163452"/>
+      <text x="39" y="34" text-anchor="middle" fill="#7DE9FF" font-size="13" font-weight="800">01</text>
+      <path d="M190 29h35M190 36h24" stroke="#5EDFFF" stroke-opacity=".55" stroke-width="2" stroke-linecap="round"/>
+      <text x="18" y="83" class="node-title">设计基线</text>
+      <text x="18" y="112" class="node-copy">边界 · 决策 · 验收标准</text>
+    </g>
+
+    <!-- Node 02 -->
+    <g transform="translate(406 575)">
+      <rect width="253" height="139" rx="22" fill="#101D34" stroke="#3A5E8D"/>
+      <rect x="16" y="15" width="46" height="28" rx="14" fill="#163452"/>
+      <text x="39" y="34" text-anchor="middle" fill="#7DE9FF" font-size="13" font-weight="800">02</text>
+      <path d="M204 23v22M193 34h22" stroke="#5EDFFF" stroke-opacity=".6" stroke-width="2" stroke-linecap="round"/>
+      <text x="18" y="83" class="node-title">可验收任务卡</text>
+      <text x="18" y="112" class="node-copy">Scope · Tests · Handoff</text>
+    </g>
+
+    <!-- Node 03 -->
+    <g transform="translate(721 575)">
+      <rect width="267" height="139" rx="22" fill="#15203A" stroke="#7467C9"/>
+      <rect x="16" y="15" width="46" height="28" rx="14" fill="#2B2857"/>
+      <text x="39" y="34" text-anchor="middle" fill="#C4B9FF" font-size="13" font-weight="800">03</text>
+      <circle cx="221" cy="31" r="12" fill="none" stroke="#A899FF" stroke-opacity=".7"/>
+      <circle cx="221" cy="31" r="3" fill="#B9ADFF"/>
+      <text x="18" y="83" class="node-title">Claude / OpenCode</text>
+      <text x="18" y="112" class="node-copy">隔离 Worktree 中执行</text>
+    </g>
+
+    <!-- Node 04 -->
+    <g transform="translate(721 764)">
+      <rect width="267" height="139" rx="22" fill="#101D34" stroke="#3A5E8D"/>
+      <rect x="16" y="15" width="46" height="28" rx="14" fill="#163452"/>
+      <text x="39" y="34" text-anchor="middle" fill="#7DE9FF" font-size="13" font-weight="800">04</text>
+      <circle cx="220" cy="31" r="10" fill="none" stroke="#67DFFF" stroke-opacity=".7" stroke-width="2"/>
+      <path d="m228 39 9 9" stroke="#67DFFF" stroke-opacity=".7" stroke-width="2" stroke-linecap="round"/>
+      <text x="18" y="83" class="node-title">独立代码审查</text>
+      <text x="18" y="112" class="node-copy">证据优先 · 稳定 Finding ID</text>
+    </g>
+
+    <!-- Node 05 -->
+    <g transform="translate(406 764)">
+      <rect width="253" height="139" rx="22" fill="#101D34" stroke="#655CA7"/>
+      <rect x="16" y="15" width="46" height="28" rx="14" fill="#2B2857"/>
+      <text x="39" y="34" text-anchor="middle" fill="#C4B9FF" font-size="13" font-weight="800">05</text>
+      <path d="M210 23a11 11 0 1 1-8 3M199 19v9h9" fill="none" stroke="#AE9FFF" stroke-opacity=".8" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+      <text x="18" y="83" class="node-title">增量整改</text>
+      <text x="18" y="112" class="node-copy">只修 Finding，不重开范围</text>
+    </g>
+
+    <!-- Node 06 -->
+    <g transform="translate(92 764)">
+      <rect width="252" height="139" rx="22" fill="#102A2A" stroke="#3CCB98"/>
+      <rect x="16" y="15" width="46" height="28" rx="14" fill="#17463B"/>
+      <text x="39" y="34" text-anchor="middle" fill="#9BFFD8" font-size="13" font-weight="800">06</text>
+      <circle cx="211" cy="31" r="14" fill="#244F43"/>
+      <path d="m204 31 5 5 10-11" fill="none" stroke="#8FFFD2" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/>
+      <text x="18" y="83" fill="#EFFFF8" font-size="25" font-weight="800" letter-spacing="1">VERIFIED</text>
+      <text x="18" y="112" fill="#8ED9C1" font-size="16" font-weight="600">通过验证，进入集成</text>
+    </g>
+
+    <g transform="translate(441 925)">
+      <rect width="380" height="30" rx="15" fill="#161D3C" stroke="#564C9B" stroke-opacity=".8"/>
+      <text x="190" y="20" text-anchor="middle" fill="#BAAEFF" font-size="12" font-weight="700" letter-spacing=".8">CHANGES_REQUIRED  ↺  READY_FOR_REVIEW</text>
+    </g>
+
+    <!-- Feature cards -->
+    <g transform="translate(60 1010)">
+      <g>
+        <rect width="465" height="126" rx="24" fill="#0C1729" stroke="#2D4569"/>
+        <rect x="22" y="22" width="42" height="42" rx="12" fill="#15314A"/>
+        <path d="M34 43h18M43 34v18" stroke="#70E3FF" stroke-width="2.2" stroke-linecap="round"/>
+        <text x="82" y="49" class="feature-title">固定 SHA · 隔离 Worktree</text>
+        <text x="82" y="78" class="feature-copy">每轮输入与产出都有确定坐标</text>
+        <text x="82" y="100" class="feature-copy">并行执行也不互相污染</text>
+      </g>
+      <g transform="translate(495)">
+        <rect width="465" height="126" rx="24" fill="#0C1729" stroke="#2D4569"/>
+        <rect x="22" y="22" width="42" height="42" rx="12" fill="#1C294F"/>
+        <path d="M33 36h20M33 43h15M33 50h18" stroke="#B2A6FF" stroke-width="2.2" stroke-linecap="round"/>
+        <text x="82" y="49" class="feature-title">AGENT_RESULT 结构化交付</text>
+        <text x="82" y="78" class="feature-copy">提交、命令、测试与风险一并返回</text>
+        <text x="82" y="100" class="feature-copy">告别“已完成”式黑箱汇报</text>
+      </g>
+      <g transform="translate(0 151)">
+        <rect width="465" height="126" rx="24" fill="#0C1729" stroke="#2D4569"/>
+        <rect x="22" y="22" width="42" height="42" rx="12" fill="#16372F"/>
+        <path d="m32 44 8 8 15-18" fill="none" stroke="#79F1C2" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/>
+        <text x="82" y="49" class="feature-title">执行与验收分离</text>
+        <text x="82" y="78" class="feature-copy">Codex 掌控基线与完成定义</text>
+        <text x="82" y="100" class="feature-copy">外部 Agent 聚焦有界实现</text>
+      </g>
+      <g transform="translate(495 151)">
+        <rect width="465" height="126" rx="24" fill="#0C1729" stroke="#2D4569"/>
+        <rect x="22" y="22" width="42" height="42" rx="12" fill="#15314A"/>
+        <path d="M33 50c6-15 14-15 21 0M36 36h15" fill="none" stroke="#70E3FF" stroke-width="2.2" stroke-linecap="round"/>
+        <text x="82" y="49" class="feature-title">设计不漂移 · 结果可复核</text>
+        <text x="82" y="78" class="feature-copy">长任务被压缩成连续的小闭环</text>
+        <text x="82" y="100" class="feature-copy">每轮都有证据和明确下一步</text>
+      </g>
+    </g>
+
+    <!-- Footer -->
+    <line x1="60" y1="1332" x2="1020" y2="1332" stroke="#3A5072" stroke-opacity=".65"/>
+    <text x="60" y="1382" fill="#DCE8FA" font-size="20" font-weight="700" letter-spacing="2">DESIGN → EXECUTE → REVIEW → VERIFY</text>
+    <text x="1020" y="1382" text-anchor="end" fill="#6DE4FF" font-size="17" font-weight="700" letter-spacing="1">多代理工程，持续推进</text>
+  </g>
+</svg>

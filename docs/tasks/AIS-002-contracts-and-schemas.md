@@ -1,23 +1,23 @@
 # AIS-002: 定义并验证数据契约和 Profile
 
-State: DRAFT
+State: INTEGRATED
 
 ## Objective
 
-把 case、GT、Agent Answer、运行元数据、策略结果、Judge 输入/输出和 Score 变成机器可验证、版本明确的契约。
+把 manifest、case、GT、Agent Answer、运行元数据、策略结果、Judge 输入/输出和 Score 变成机器可验证、版本明确的契约。
 
 ## Source of truth
 
 - Design: `docs/ai-scoring-design.md` §5–§10、§17、§20
-- Base: `ai-score-v1`
+- Base: `d1179998079f56f3dbda0fdcc4798e323bbf866d`
 - Dependencies: DEC-001, AIS-001
 
 ## Execution envelope
 
-- Executor: Codex subagent or external terminal agent
-- Working directory: 派发时创建的绝对 worktree 路径
+- Executor: Claude Code CLI
+- Working directory: `F:\develop\codes\GraphBenchmark-ai-score-v1-worktrees\ais-002-contracts-schemas`
 - Branch: `codex/ais-002-contracts-schemas`
-- Expected HEAD: 派发时填写完整 SHA
+- Expected HEAD: `d1179998079f56f3dbda0fdcc4798e323bbf866d`
 - Return channel: commit + AGENT_RESULT
 
 ## Invariants
@@ -36,6 +36,7 @@ State: DRAFT
 - `profiles/bug-localization-v1.yaml`
 - `profiles/impact-analysis-v1.yaml`
 - `tests/schemas/`, `tests/profiles/`
+- `pyproject.toml`、`requirements-dev.txt` 中本任务所需的 Schema/YAML 验证依赖
 
 ## Excluded scope
 
@@ -46,7 +47,7 @@ State: DRAFT
 
 ## Acceptance criteria
 
-- 设计 §18 列出的八类 Schema 均存在，并锁定 `$schema`、`$id` 和业务版本字段。
+- 设计 §18 列出的九类 Schema 均存在，并锁定 `$schema`、`$id` 和业务版本字段。
 - 三类任务、finding kind、credit、状态和 artifact 枚举受约束。
 - 正例覆盖完整结构和最小合法结构；反例覆盖身份泄漏、非法 credit、未知 item、坏引用和 digest 缺失。
 - Profile 共同维度合计 100，且 Profile 不能改写共同 Judge 输出协议。
@@ -57,6 +58,19 @@ State: DRAFT
 - `.\.venv\Scripts\python.exe -m pytest tests/schemas tests/profiles -q`
 - `.\.venv\Scripts\python.exe -m pytest tests -q`
 - `git diff --check`
+
+## Review evidence
+
+- Review: `docs/reviews/AIS-002-review-1.md`
+- Reviewed head: `8be8bb5da71aca6864ac556e89a5c664c809aaf6`
+- Verdict: `CHANGES_REQUIRED`
+- Open findings: `R1`–`R7`
+- Remediation round 1: `READY_FOR_REVIEW`
+- Remediation head: `13d303c024f4132c7e00f5e729003f0194491491`
+- Remediation verification: schema/profile `165 passed`; full suite `167 passed`; ruff, format, pip check, and diff check pass
+- Independent review: `PASS_WITH_NOTES` on `13d303c024f4132c7e00f5e729003f0194491491`
+- Integrated commits: `10736ca`, `dec808b`
+- Post-integration verification: schema/profile `165 passed`; full suite `167 passed`; ruff, format, pip check, and diff check pass
 
 ## Delivery contract
 

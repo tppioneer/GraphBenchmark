@@ -661,6 +661,7 @@ Judge 通过 Claude Code CLI 非交互模式执行，不直接绑定某个模型
 
 - Judge 模型通过配置和 CLI 参数传入，配置字段为 `judge_model`。
 - 默认 Judge 模型为 `glm-5.2`。
+- 正式 artifact 使用 `judge_requested_model` 保存传给 CLI 的请求模型，使用 `judge_model` 保存可核验的实际生效模型；两个字段都禁止 `Auto` 和不固定的 `latest`。
 - Judge A、B、C 必须使用相同的请求模型、实际生效模型、CLI 配置和生成参数。
 - 同一正式实验从第一次到最后一次 Judge 调用都必须保持相同模型。
 - CLI adapter 必须记录请求模型和可核验的实际生效模型；无法验证实际模型时，正式 run invalid。
@@ -807,6 +808,7 @@ run/
 
 说明：
 
+- `manifest.json`：本次 run 的 artifact 清单。artifact name 只能是 `raw_response`、`agent_answer`、`run_metadata`、`policy_result`、`blind_input`、`judge_a`、`judge_b`、`judge_c`、`judge_score`、`adjudication`、`effective_score`；状态只能是 `present`、`absent`、`failed`、`not_applicable`。`present` 必须记录相对路径和 digest；未生成的可选 artifact 通过状态表达，不创建空文件。v1 的 `adjudication` 固定为 `not_applicable`。
 - `raw-response.txt`：被测模型的原始响应，任何情况下都保留。
 - `agent-answer.json`：从原始响应解析或降级包装得到的最终答案。
 - `run-metadata.json`：Runner 采集的实验身份、工具过程和成本指标。
@@ -831,6 +833,7 @@ GraphBenchmark-ai-score-v1/
 │   ├── bug-localization-v1.yaml
 │   └── impact-analysis-v1.yaml
 ├── schemas/
+│   ├── manifest.schema.json
 │   ├── case.schema.json
 │   ├── ground-truth.schema.json
 │   ├── agent-answer.schema.json
@@ -910,6 +913,7 @@ GraphBenchmark-ai-score-v1/
   "judge_protocol": "semantic_outcome_v1",
   "scoring_profile": "bug_localization_v1",
   "judge_provider": "claude-code-cli",
+  "judge_requested_model": "glm-5.2",
   "judge_model": "glm-5.2",
   "judge_cli_version": "PINNED_CLI_VERSION",
   "judge_prompt_digest": "sha256:...",

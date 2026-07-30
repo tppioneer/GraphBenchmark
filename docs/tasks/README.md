@@ -20,7 +20,7 @@
 |---|---|---|---|
 | `DEC-001` | 冻结 v1 协议与实验决策 | VERIFIED | none |
 | `AIS-001` | 建立可测试的 Python 工程骨架 | INTEGRATED | 基线 commit |
-| `AIS-002` | 定义并验证全部数据契约和 Profile | DRAFT | DEC-001, AIS-001 |
+| `AIS-002` | 定义并验证全部数据契约和 Profile | INTEGRATED | DEC-001, AIS-001 |
 | `AIS-003` | 保存原始响应并生成 Agent Answer | DRAFT | AIS-002 |
 | `AIS-004` | 加载 Profile 并验证 GT Rubric | DRAFT | AIS-002 |
 | `AIS-005` | 确定性计算 item、维度、总分和 cap | DRAFT | AIS-004 |

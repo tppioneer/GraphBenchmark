@@ -21,11 +21,11 @@
 | `DEC-001` | 冻结 v1 协议与实验决策 | VERIFIED | none |
 | `AIS-001` | 建立可测试的 Python 工程骨架 | INTEGRATED | 基线 commit |
 | `AIS-002` | 定义并验证全部数据契约和 Profile | INTEGRATED | DEC-001, AIS-001 |
-| `AIS-003` | 保存原始响应并生成 Agent Answer | DRAFT | AIS-002 |
-| `AIS-004` | 加载 Profile 并验证 GT Rubric | DRAFT | AIS-002 |
+| `AIS-003` | 保存原始响应并生成 Agent Answer | READY | AIS-002 |
+| `AIS-004` | 加载 Profile 并验证 GT Rubric | READY | AIS-002 |
 | `AIS-005` | 确定性计算 item、维度、总分和 cap | DRAFT | AIS-004 |
 | `AIS-006` | 形成多 Judge 共识和人工复核有效分 | DRAFT | AIS-005 |
-| `AIS-007` | 生成盲评输入、digest 与缓存键 | DRAFT | AIS-002 |
+| `AIS-007` | 生成盲评输入、digest 与缓存键 | READY | AIS-002 |
 | `AIS-008` | 集成 Claude Code CLI Judge、提示和仲裁调用 | DRAFT | AIS-006, AIS-007 |
 | `AIS-009` | 运行 Agent 并独立采集策略/成本指标 | DRAFT | AIS-003, AIS-004 |
 | `AIS-010` | 可选建立三个 Profile 的人工校准诊断 | DRAFT | AIS-006, AIS-008 |

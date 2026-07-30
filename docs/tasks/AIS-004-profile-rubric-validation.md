@@ -1,6 +1,6 @@
 # AIS-004: 加载 Profile 并验证 Ground Truth Rubric
 
-State: DRAFT
+State: READY
 
 ## Objective
 
@@ -9,15 +9,15 @@ State: DRAFT
 ## Source of truth
 
 - Design: `docs/ai-scoring-design.md` §5–§7
-- Base: `ai-score-v1`
+- Base: `6898c25c8dd8ee0c91df776699dc3b6ce76dfddc`
 - Dependencies: AIS-002
 
 ## Execution envelope
 
 - Executor: Codex subagent or external terminal agent
-- Working directory: 派发时创建的绝对 worktree 路径
+- Working directory: `F:\\develop\\codes\\GraphBenchmark-ai-score-v1-worktrees\\ais-004-profile-rubric-validation`
 - Branch: `codex/ais-004-profile-rubric-validation`
-- Expected HEAD: 派发时填写完整 SHA
+- Expected HEAD: `6898c25c8dd8ee0c91df776699dc3b6ce76dfddc`
 - Return channel: commit + AGENT_RESULT
 
 ## Invariants

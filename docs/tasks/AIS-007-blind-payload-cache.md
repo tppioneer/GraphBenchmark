@@ -1,6 +1,6 @@
 # AIS-007: 生成盲评输入、digest 与缓存键
 
-State: DRAFT
+State: READY
 
 ## Objective
 
@@ -9,15 +9,15 @@ State: DRAFT
 ## Source of truth
 
 - Design: `docs/ai-scoring-design.md` §9、§13.3、§20
-- Base: `ai-score-v1`
+- Base: `6898c25c8dd8ee0c91df776699dc3b6ce76dfddc`
 - Dependencies: AIS-002
 
 ## Execution envelope
 
 - Executor: Codex subagent or external terminal agent
-- Working directory: 派发时创建的绝对 worktree 路径
+- Working directory: `F:\\develop\\codes\\GraphBenchmark-ai-score-v1-worktrees\\ais-007-blind-payload-cache`
 - Branch: `codex/ais-007-blind-payload-cache`
-- Expected HEAD: 派发时填写完整 SHA
+- Expected HEAD: `6898c25c8dd8ee0c91df776699dc3b6ce76dfddc`
 - Return channel: commit + AGENT_RESULT
 
 ## Invariants

@@ -6,9 +6,9 @@
 
 ## 当前控制状态
 
-- 工作模式：Plan only
+- 工作模式：Execute
 - 当前分支：`ai-score-v1`
-- 基线状态：仓库尚无 commit，所有实现卡的 `Expected HEAD` 必须在派发前填写完整 SHA。
+- 基线状态：初始基线为 `edc7fbdfbf819da85275fc54cc7107a9fbb250be`；实现卡派发前必须填写完整 `Expected HEAD`。
 - 用户工作区：已有 `.gitignore`、设计文档及本地 Skill 改动，不得清理或重置。
 - 协议决策：`DEC-001` 已 `VERIFIED`。
 
@@ -19,7 +19,7 @@
 | ID | 结果 | 状态 | 依赖 |
 |---|---|---|---|
 | `DEC-001` | 冻结 v1 协议与实验决策 | VERIFIED | none |
-| `AIS-001` | 建立可测试的 Python 工程骨架 | DRAFT | 基线 commit |
+| `AIS-001` | 建立可测试的 Python 工程骨架 | INTEGRATED | 基线 commit |
 | `AIS-002` | 定义并验证全部数据契约和 Profile | DRAFT | DEC-001, AIS-001 |
 | `AIS-003` | 保存原始响应并生成 Agent Answer | DRAFT | AIS-002 |
 | `AIS-004` | 加载 Profile 并验证 GT Rubric | DRAFT | AIS-002 |

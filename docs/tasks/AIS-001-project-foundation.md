@@ -1,6 +1,6 @@
 # AIS-001: 建立可测试的 Python 工程骨架
 
-State: DRAFT
+State: INTEGRATED
 
 ## Objective
 
@@ -9,15 +9,15 @@ State: DRAFT
 ## Source of truth
 
 - Design: `docs/ai-scoring-design.md` §4、§18
-- Base: `ai-score-v1`
+- Base: `edc7fbdfbf819da85275fc54cc7107a9fbb250be`
 - Dependencies: 首个基线 commit
 
 ## Execution envelope
 
-- Executor: Codex subagent or external terminal agent
-- Working directory: 派发时创建的绝对 worktree 路径
+- Executor: Claude Code CLI
+- Working directory: `F:\develop\codes\GraphBenchmark-ai-score-v1-worktrees\ais-001-project-foundation`
 - Branch: `codex/ais-001-project-foundation`
-- Expected HEAD: 派发时填写完整 SHA
+- Expected HEAD: `edc7fbdfbf819da85275fc54cc7107a9fbb250be`
 - Return channel: commit + AGENT_RESULT
 
 ## Invariants
@@ -58,6 +58,16 @@ State: DRAFT
 - `graphbenchmark --help`
 - `.\.venv\Scripts\python.exe -m runner.benchmark_runner --help`
 - `git diff --check`
+
+## Review evidence
+
+- Reviewed range: `edc7fbdfbf819da85275fc54cc7107a9fbb250be..bee32a849661e64737cae6a51efb70573c453fa7`
+- Verdict: `PASS_WITH_NOTES`
+- Integrated into: `ai-score-v1` at `bee32a849661e64737cae6a51efb70573c453fa7`
+- Independent clean environment: Python `3.12.10`
+- Independent checks: editable install、`2 passed`、Ruff lint/format、两个 CLI `--help`、`pip check`、`git diff --check` 全部通过。
+- Findings: none.
+- Non-blocking note: `requirements-dev.txt` 是 Windows 开发环境的时间点锁定；跨平台环境应从 `pyproject.toml` 重新解析依赖。
 
 ## Delivery contract
 

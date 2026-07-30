@@ -21,7 +21,8 @@ REPO_ROOT = Path(__file__).resolve().parent.parent.parent
 SCHEMA_DIR = REPO_ROOT / "schemas"
 PROFILE_DIR = REPO_ROOT / "profiles"
 
-#: The eight artifact schemas required by docs/ai-scoring-design.md §18.
+#: The nine artifact schemas required by docs/ai-scoring-design.md §17 (the eight
+#: contracts plus the run artifact manifest).
 SCHEMA_NAMES = (
     "case",
     "ground-truth",
@@ -31,6 +32,7 @@ SCHEMA_NAMES = (
     "judge-input",
     "judge-output",
     "score",
+    "manifest",
 )
 
 
@@ -127,11 +129,48 @@ def validate_judge_output_items(judge_output: dict[str, Any], ground_truth: dict
 def validate_answer_evidence_pointers(
     judge_output: dict[str, Any], answer_doc: dict[str, Any]
 ) -> None:
-    """Every answer_evidence.json_pointer must resolve within the answer payload (§10.2)."""
+    """Every answer_evidence.json_pointer must resolve to referenceable text and
+    the quote must occur within that referenced text (§10.2).
+
+    The JSON Pointer must resolve to a string (referenceable text); a pointer
+    that resolves to a non-text node, or a quote absent from the referenced
+    text, is a contract violation. Production Judge validation remains outside
+    AIS-002; this is the test-only cross-document checker.
+    """
     for i, item in enumerate(judge_output["items"]):
         for j, ev in enumerate(item.get("answer_evidence", [])):
-            if _resolve_pointer(answer_doc, ev["json_pointer"]) is _MISSING:
+            resolved = _resolve_pointer(answer_doc, ev["json_pointer"])
+            if resolved is _MISSING:
                 raise ContractError(
                     f"answer_evidence pointer {ev['json_pointer']!r} does not resolve",
                     f"/items/{i}/answer_evidence/{j}/json_pointer",
                 )
+            if not isinstance(resolved, str):
+                raise ContractError(
+                    f"answer_evidence pointer {ev['json_pointer']!r} resolves to "
+                    f"non-text ({type(resolved).__name__})",
+                    f"/items/{i}/answer_evidence/{j}/json_pointer",
+                )
+            if ev["quote"] not in resolved:
+                raise ContractError(
+                    f"answer_evidence quote {ev['quote']!r} not found in referenced text",
+                    f"/items/{i}/answer_evidence/{j}/quote",
+                )
+
+
+def validate_requested_effective_model(score: dict[str, Any]) -> None:
+    """The requested and effective Judge models must agree for a formal score.
+
+    JSON Schema cannot express sibling-field equality, so this cross-field
+    invariant is enforced here as a test-only checker (mirroring the
+    cross-document validators). A formal score is emitted only after
+    requested/effective consistency is verified (DEC-001 #6, §13.3, §20);
+    per-call A/B/C model metadata remains AIS-008 scope.
+    """
+    requested = score.get("judge_requested_model")
+    effective = score.get("judge_model")
+    if requested != effective:
+        raise ContractError(
+            f"requested model {requested!r} != effective model {effective!r}",
+            "/judge_requested_model",
+        )

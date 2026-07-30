@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://graphbenchmark.dev/schemas/score.schema.json",
   "title": "Score",
-  "description": "Deterministic aggregation result and the formal view consumed by reports (see docs/ai-scoring-design.md §11, §20). Every formal score carries full protocol/model/prompt/input-digest identity so that scores across incompatible protocols, profiles, models, prompts, GT revisions or consensus versions cannot be mixed (invariant). The effective item credit in v1 always equals the Judge consensus credit (DEC-001 #8). Business version is locked via schema_version.",
+  "description": "Deterministic aggregation result and the formal view consumed by reports (see docs/ai-scoring-design.md §11, §20). Every formal score carries full protocol/model/prompt/input-digest identity so that scores across incompatible protocols, profiles, models, prompts, GT revisions or consensus versions cannot be mixed (invariant). The requested Judge model (judge_requested_model, sent to the CLI) and the verified effective model (judge_model) must both be pinned and must agree; a formal score is emitted only after that consistency is verified (DEC-001 #6, §13.3, §20). The effective item credit in v1 always equals the Judge consensus credit (DEC-001 #8). Human-review reasons are constrained to the frozen consensus triggers (DEC-001 #5, §13.1). Business version is locked via schema_version.",
   "type": "object",
   "required": [
     "schema_version",
@@ -10,6 +10,7 @@
     "judge_protocol",
     "scoring_profile",
     "judge_provider",
+    "judge_requested_model",
     "judge_model",
     "judge_cli_version",
     "judge_prompt_digest",
@@ -44,10 +45,13 @@
     "judge_provider": {
       "const": "claude-code-cli"
     },
+    "judge_requested_model": {
+      "allOf": [{ "$ref": "#/$defs/pinnedModelName" }],
+      "description": "The model value sent to the Judge CLI (requested). Must equal judge_model (the verified effective model) for a formal score; a requested/effective mismatch invalidates the run (DEC-001 #6, §13.3, §20)."
+    },
     "judge_model": {
-      "type": "string",
-      "minLength": 1,
-      "description": "Pinned Judge model; 'Auto'/'latest' are not permitted (DEC-001 #6)."
+      "allOf": [{ "$ref": "#/$defs/pinnedModelName" }],
+      "description": "The verified effective model actually used by the Judge CLI (DEC-001 #6, §13.4)."
     },
     "judge_cli_version": {
       "type": "string",
@@ -158,12 +162,70 @@
     "requires_human_review": {
       "type": "boolean"
     },
+    "human_review_reasons": {
+      "type": "array",
+      "items": {
+        "enum": [
+          "critical_credit_range",
+          "critical_consensus_confidence",
+          "overall_confidence"
+        ]
+      },
+      "description": "Reason codes for human review, derived from the frozen consensus triggers (DEC-001 #5, §13.1): critical item credit range, critical consensus confidence, and overall confidence. Required non-empty when requires_human_review is true; absent or empty when false."
+    },
     "run_mode": {
       "enum": ["development", "formal"],
       "description": "Reports must state which Judge mode was used (§13.2)."
     }
   },
+  "allOf": [
+    {
+      "description": "When human review is required, at least one frozen trigger reason must be present.",
+      "if": {
+        "properties": {
+          "requires_human_review": {
+            "const": true
+          }
+        },
+        "required": ["requires_human_review"]
+      },
+      "then": {
+        "required": ["human_review_reasons"],
+        "properties": {
+          "human_review_reasons": {
+            "minItems": 1
+          }
+        }
+      }
+    },
+    {
+      "description": "When human review is not required, no reasons may be present (absent or empty); reasons are never fabricated.",
+      "if": {
+        "properties": {
+          "requires_human_review": {
+            "const": false
+          }
+        },
+        "required": ["requires_human_review"]
+      },
+      "then": {
+        "properties": {
+          "human_review_reasons": {
+            "maxItems": 0
+          }
+        }
+      }
+    }
+  ],
   "$defs": {
+    "pinnedModelName": {
+      "type": "string",
+      "minLength": 1,
+      "not": {
+        "pattern": "^(?i:auto|latest)$"
+      },
+      "description": "A pinned, reproducible model name. Unpinned sentinels (Auto, auto, latest and case variants) are rejected (DEC-001 #6, §13.3)."
+    },
     "itemScore": {
       "type": "object",
       "required": ["item_id", "dimension", "points", "consensus_credit", "item_score"],

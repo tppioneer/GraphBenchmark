@@ -1,0 +1,135 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://graphbenchmark.dev/schemas/manifest.schema.json",
+  "title": "Run Artifact Manifest",
+  "description": "Manifest of run artifacts and their status (see docs/ai-scoring-design.md §17). Each entry names an artifact and its status. A present entry must carry a repository-relative path and a sha256 digest; non-present artifacts are expressed via status only and MUST NOT use empty placeholder files (invariant). v1 adjudication is reserved and always not_applicable (§14). Business version is locked via schema_version.",
+  "type": "object",
+  "required": ["schema_version", "artifacts"],
+  "additionalProperties": false,
+  "properties": {
+    "schema_version": {
+      "const": "manifest-v1",
+      "description": "Locked business version for the manifest contract."
+    },
+    "artifacts": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/artifactEntry"
+      },
+      "description": "Status of each run artifact (design §17)."
+    }
+  },
+  "$defs": {
+    "artifactEntry": {
+      "type": "object",
+      "required": ["name", "status"],
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "enum": [
+            "raw_response",
+            "agent_answer",
+            "run_metadata",
+            "policy_result",
+            "blind_input",
+            "judge_a",
+            "judge_b",
+            "judge_c",
+            "judge_score",
+            "adjudication",
+            "effective_score"
+          ],
+          "description": "Artifact identifier (design §17)."
+        },
+        "status": {
+          "enum": ["present", "absent", "failed", "not_applicable"],
+          "description": "Artifact status. Non-present artifacts are never represented by empty placeholder files (§17)."
+        },
+        "path": {
+          "$ref": "#/$defs/repoRelativePath",
+          "description": "Repository-relative artifact path; required only when status is present."
+        },
+        "sha256": {
+          "type": "string",
+          "pattern": "^sha256:[0-9a-f]{64}$",
+          "description": "sha256 digest of the artifact bytes; required only when status is present."
+        }
+      },
+      "allOf": [
+        {
+          "description": "A present artifact must carry a repository-relative path and a sha256 digest.",
+          "if": {
+            "properties": {
+              "status": {
+                "const": "present"
+              }
+            },
+            "required": ["status"]
+          },
+          "then": {
+            "required": ["path", "sha256"]
+          }
+        },
+        {
+          "description": "Non-present artifacts must not carry a path or digest (no empty placeholder files).",
+          "if": {
+            "properties": {
+              "status": {
+                "enum": ["absent", "failed", "not_applicable"]
+              }
+            },
+            "required": ["status"]
+          },
+          "then": {
+            "not": {
+              "anyOf": [
+                {
+                  "required": ["path"]
+                },
+                {
+                  "required": ["sha256"]
+                }
+              ]
+            }
+          }
+        },
+        {
+          "description": "v1 adjudication is reserved and always not_applicable (§14).",
+          "if": {
+            "properties": {
+              "name": {
+                "const": "adjudication"
+              }
+            },
+            "required": ["name"]
+          },
+          "then": {
+            "properties": {
+              "status": {
+                "const": "not_applicable"
+              }
+            }
+          }
+        }
+      ]
+    },
+    "repoRelativePath": {
+      "type": "string",
+      "minLength": 1,
+      "not": {
+        "anyOf": [
+          {
+            "pattern": "^/"
+          },
+          {
+            "pattern": "^[A-Za-z]:"
+          },
+          {
+            "pattern": "\\\\"
+          }
+        ]
+      },
+      "description": "Repository-relative path using forward slashes; absolute Unix paths, Windows drive paths and backslashes are rejected."
+    }
+  }
+}

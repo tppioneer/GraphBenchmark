@@ -34,12 +34,11 @@
       "properties": {
         "summary": {
           "type": "string",
-          "minLength": 1
+          "description": "Short headline; may be empty for the schema-warning fallback and for empty/refused/invalid runs (see the status-conditional allOf branches)."
         },
         "explanation": {
           "type": "string",
-          "minLength": 1,
-          "description": "Complete, self-contained Markdown; the primary scored content."
+          "description": "Complete, self-contained Markdown; the primary scored content. Required non-empty for completed answers and for the completed_with_schema_warning fallback (which carries the raw Markdown, §8.8); may be empty for empty/refused/invalid runs."
         },
         "findings": {
           "type": "array",
@@ -232,6 +231,54 @@
                     }
                   }
                 }
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "description": "A completed answer must carry meaningful, non-empty summary and explanation (the primary scored content).",
+      "if": {
+        "properties": {
+          "status": {
+            "const": "completed"
+          }
+        },
+        "required": ["status"]
+      },
+      "then": {
+        "properties": {
+          "answer": {
+            "properties": {
+              "summary": {
+                "minLength": 1
+              },
+              "explanation": {
+                "minLength": 1
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "description": "The schema-warning fallback allows an empty summary but must carry the raw Markdown in explanation (§8.8); a fabricated non-empty summary is not required.",
+      "if": {
+        "properties": {
+          "status": {
+            "const": "completed_with_schema_warning"
+          }
+        },
+        "required": ["status"]
+      },
+      "then": {
+        "properties": {
+          "answer": {
+            "properties": {
+              "explanation": {
+                "minLength": 1,
+                "description": "Must carry the raw Markdown returned by the model (§8.8)."
               }
             }
           }

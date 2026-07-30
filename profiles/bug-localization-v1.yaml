@@ -7,6 +7,7 @@
 profile_version: bug-localization-v1
 base: common-v1
 task_type: bug_localization
+scoring_profile: bug_localization_v1
 judge_protocol: semantic_outcome_v1
 
 dimension_semantics:

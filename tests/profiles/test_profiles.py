@@ -29,6 +29,27 @@ FROZEN_DIMENSIONS = [
     ("evidence_actionability", 10),
 ]
 
+# Frozen underscore scoring-profile ids (design §6, R4) and the one-to-one
+# mapping among filename, task_type, scoring_profile and profile_version.
+FROZEN_SCORING_PROFILES = ["flow_tracing_v1", "bug_localization_v1", "impact_analysis_v1"]
+EXPECTED_PROFILE_IDENTITY = {
+    "flow-tracing-v1": {
+        "task_type": "flow_tracing",
+        "scoring_profile": "flow_tracing_v1",
+        "profile_version": "flow-tracing-v1",
+    },
+    "bug-localization-v1": {
+        "task_type": "bug_localization",
+        "scoring_profile": "bug_localization_v1",
+        "profile_version": "bug-localization-v1",
+    },
+    "impact-analysis-v1": {
+        "task_type": "impact_analysis",
+        "scoring_profile": "impact_analysis_v1",
+        "profile_version": "impact-analysis-v1",
+    },
+}
+
 
 class ProfileError(Exception):
     def __init__(self, message: str, pointer: str) -> None:
@@ -67,6 +88,55 @@ def validate_task_profile(profile: dict[str, Any], common: dict[str, Any]) -> No
                 f"undeclared critical_error_code {code!r}",
                 f"/critical_error_codes/{i}",
             )
+
+
+def validate_profile_identity(profile: dict[str, Any], filename: str) -> None:
+    """Filename, task_type, scoring_profile and profile_version must map 1:1 (R4).
+
+    Each task Profile explicitly declares its frozen underscore scoring_profile
+    id, and the four identifiers cross-derive from one another so a mismatch in
+    any one is caught with a locatable pointer.
+    """
+    expected = EXPECTED_PROFILE_IDENTITY[filename]
+    scoring_profile = profile.get("scoring_profile")
+    task_type = profile.get("task_type")
+    profile_version = profile.get("profile_version")
+    if scoring_profile not in FROZEN_SCORING_PROFILES:
+        raise ProfileError(
+            f"scoring_profile {scoring_profile!r} is not a frozen profile id",
+            "/scoring_profile",
+        )
+    if scoring_profile != expected["scoring_profile"]:
+        raise ProfileError(
+            f"scoring_profile {scoring_profile!r} != expected {expected['scoring_profile']!r}",
+            "/scoring_profile",
+        )
+    if task_type != expected["task_type"]:
+        raise ProfileError(
+            f"task_type {task_type!r} != expected {expected['task_type']!r}",
+            "/task_type",
+        )
+    if profile_version != expected["profile_version"]:
+        raise ProfileError(
+            f"profile_version {profile_version!r} != expected {expected['profile_version']!r}",
+            "/profile_version",
+        )
+    # Cross-derive to enforce a one-to-one mapping among all four identifiers.
+    if scoring_profile != f"{task_type}_v1":
+        raise ProfileError(
+            f"scoring_profile {scoring_profile!r} != {task_type}_v1 derived from task_type",
+            "/scoring_profile",
+        )
+    if profile_version != f"{task_type.replace('_', '-')}-v1":
+        raise ProfileError(
+            f"profile_version {profile_version!r} != derived {task_type.replace('_', '-')}-v1",
+            "/profile_version",
+        )
+    if profile_version != filename:
+        raise ProfileError(
+            f"profile_version {profile_version!r} != filename {filename!r}",
+            "/profile_version",
+        )
 
 
 COMMON = load_profile("common")
@@ -150,6 +220,17 @@ def test_task_profile_extends_common(name: str) -> None:
     assert load_profile(name)["base"] == "common-v1"
 
 
+@pytest.mark.parametrize("name", TASK_PROFILES)
+def test_task_profile_declares_scoring_profile(name: str) -> None:
+    profile = load_profile(name)
+    assert profile["scoring_profile"] in FROZEN_SCORING_PROFILES
+
+
+@pytest.mark.parametrize("name", TASK_PROFILES)
+def test_profile_identity_mapping(name: str) -> None:
+    validate_profile_identity(load_profile(name), name)  # no raise
+
+
 # ----------------------------- negative ------------------------------------ #
 
 
@@ -183,3 +264,35 @@ def test_task_profile_undeclared_critical_code_rejected() -> None:
     with pytest.raises(ProfileError) as exc_info:
         validate_task_profile(bad, COMMON)
     assert exc_info.value.pointer == "/critical_error_codes/2"
+
+
+def test_profile_identity_scoring_profile_mismatch_rejected() -> None:
+    bad = copy.deepcopy(load_profile("flow-tracing-v1"))
+    bad["scoring_profile"] = "bug_localization_v1"
+    with pytest.raises(ProfileError) as exc_info:
+        validate_profile_identity(bad, "flow-tracing-v1")
+    assert exc_info.value.pointer == "/scoring_profile"
+
+
+def test_profile_identity_task_type_mismatch_rejected() -> None:
+    bad = copy.deepcopy(load_profile("bug-localization-v1"))
+    bad["task_type"] = "flow_tracing"
+    with pytest.raises(ProfileError) as exc_info:
+        validate_profile_identity(bad, "bug-localization-v1")
+    assert exc_info.value.pointer == "/task_type"
+
+
+def test_profile_identity_version_mismatch_rejected() -> None:
+    bad = copy.deepcopy(load_profile("impact-analysis-v1"))
+    bad["profile_version"] = "flow-tracing-v1"
+    with pytest.raises(ProfileError) as exc_info:
+        validate_profile_identity(bad, "impact-analysis-v1")
+    assert exc_info.value.pointer == "/profile_version"
+
+
+def test_profile_identity_unknown_scoring_profile_rejected() -> None:
+    bad = copy.deepcopy(load_profile("flow-tracing-v1"))
+    bad["scoring_profile"] = "flow_tracing_v2"
+    with pytest.raises(ProfileError) as exc_info:
+        validate_profile_identity(bad, "flow-tracing-v1")
+    assert exc_info.value.pointer == "/scoring_profile"

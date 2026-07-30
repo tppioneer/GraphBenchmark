@@ -7,6 +7,7 @@
 profile_version: impact-analysis-v1
 base: common-v1
 task_type: impact_analysis
+scoring_profile: impact_analysis_v1
 judge_protocol: semantic_outcome_v1
 
 dimension_semantics:

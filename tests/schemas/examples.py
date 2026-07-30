@@ -297,6 +297,77 @@ def agent_answer_with_bad_evidence_reference() -> dict[str, Any]:
     return bad
 
 
+# Status-conditional answer representation (design §8.8, R1).
+# completed_with_schema_warning allows an empty summary but must carry the raw
+# Markdown in explanation; empty/refused/invalid must have a legal representation
+# without fabricated non-empty answer text; completed stays non-empty.
+
+
+def agent_answer_schema_warning_fallback() -> dict[str, Any]:
+    """The §8.8 degradation wrapper: empty summary, raw-Markdown explanation."""
+    return {
+        "schema_version": "agent-answer-v1",
+        "case_id": CASE_ID,
+        "task_type": "bug_localization",
+        "status": "completed_with_schema_warning",
+        "answer": {
+            "summary": "",
+            "explanation": "模型返回的原始 Markdown。",
+            "findings": [],
+            "limitations": [],
+            "recommended_actions": [],
+        },
+        "evidence": [],
+    }
+
+
+def agent_answer_empty() -> dict[str, Any]:
+    """An empty run: legal representation with no fabricated answer text."""
+    return {
+        "schema_version": "agent-answer-v1",
+        "case_id": CASE_ID,
+        "task_type": "bug_localization",
+        "status": "empty",
+        "answer": {"summary": "", "explanation": ""},
+    }
+
+
+def agent_answer_refused() -> dict[str, Any]:
+    """A refused run: legal representation with no fabricated answer text."""
+    return {
+        "schema_version": "agent-answer-v1",
+        "case_id": CASE_ID,
+        "task_type": "bug_localization",
+        "status": "refused",
+        "answer": {"summary": "", "explanation": ""},
+    }
+
+
+def agent_answer_invalid() -> dict[str, Any]:
+    """An invalid run: legal representation with no fabricated answer text."""
+    return {
+        "schema_version": "agent-answer-v1",
+        "case_id": CASE_ID,
+        "task_type": "bug_localization",
+        "status": "invalid",
+        "answer": {"summary": "", "explanation": ""},
+    }
+
+
+def agent_answer_schema_warning_empty_explanation() -> dict[str, Any]:
+    """Schema-warning fallback whose explanation is empty (must be rejected)."""
+    bad = agent_answer_schema_warning_fallback()
+    bad["answer"]["explanation"] = ""
+    return bad
+
+
+def agent_answer_completed_empty_summary() -> dict[str, Any]:
+    """A completed answer with an empty summary (must be rejected)."""
+    bad = copy.deepcopy(MINIMAL_AGENT_ANSWER)
+    bad["answer"]["summary"] = ""
+    return bad
+
+
 # --------------------------------------------------------------------------- #
 # run-metadata.schema.json
 # --------------------------------------------------------------------------- #
@@ -605,6 +676,24 @@ def judge_output_with_bad_answer_pointer() -> dict[str, Any]:
     return bad
 
 
+def judge_output_with_mismatched_quote() -> dict[str, Any]:
+    """A correct json_pointer but a quote absent from the referenced text (R5)."""
+    bad = copy.deepcopy(FULL_JUDGE_OUTPUT)
+    # /answer/summary resolves, but this quote is not a substring of the summary.
+    bad["items"][0]["answer_evidence"][0]["json_pointer"] = "/answer/summary"
+    bad["items"][0]["answer_evidence"][0]["quote"] = "this quote is not in the summary"
+    return bad
+
+
+def judge_output_with_non_text_pointer() -> dict[str, Any]:
+    """A json_pointer that resolves to a non-text node (R5)."""
+    bad = copy.deepcopy(FULL_JUDGE_OUTPUT)
+    # /answer/findings resolves to an array, not referenceable text.
+    bad["items"][0]["answer_evidence"][0]["json_pointer"] = "/answer/findings"
+    bad["items"][0]["answer_evidence"][0]["quote"] = "finding-1"
+    return bad
+
+
 # --------------------------------------------------------------------------- #
 # score.schema.json
 # --------------------------------------------------------------------------- #
@@ -616,6 +705,7 @@ FULL_SCORE: dict[str, Any] = {
     "judge_protocol": "semantic_outcome_v1",
     "scoring_profile": "bug_localization_v1",
     "judge_provider": "claude-code-cli",
+    "judge_requested_model": "glm-5.2",
     "judge_model": "glm-5.2",
     "judge_cli_version": "2.1.220",
     "judge_prompt_digest": DIGEST_PROMPT,
@@ -721,6 +811,7 @@ MINIMAL_SCORE: dict[str, Any] = {
     "judge_protocol": "semantic_outcome_v1",
     "scoring_profile": "bug_localization_v1",
     "judge_provider": "claude-code-cli",
+    "judge_requested_model": "glm-5.2",
     "judge_model": "glm-5.2",
     "judge_cli_version": "2.1.220",
     "judge_prompt_digest": DIGEST_PROMPT,
@@ -764,4 +855,179 @@ def score_with_bad_benchmark_version() -> dict[str, Any]:
     """A score carrying an incompatible benchmark version."""
     bad = copy.deepcopy(MINIMAL_SCORE)
     bad["benchmark_version"] = "ai-score-v2"
+    return bad
+
+
+def score_with_model_mismatch() -> dict[str, Any]:
+    """Requested and effective Judge models differ (must be rejected, R2)."""
+    bad = copy.deepcopy(MINIMAL_SCORE)
+    bad["judge_requested_model"] = "glm-5.2"
+    bad["judge_model"] = "claude-sonnet-4"
+    return bad
+
+
+def score_with_human_review() -> dict[str, Any]:
+    """A formal score flagged for human review with frozen trigger reasons (R3)."""
+    bad = copy.deepcopy(MINIMAL_SCORE)
+    bad["requires_human_review"] = True
+    bad["human_review_reasons"] = ["critical_consensus_confidence", "overall_confidence"]
+    bad["consensus"]["human_review_triggered"] = True
+    return bad
+
+
+# --------------------------------------------------------------------------- #
+# manifest.schema.json
+# --------------------------------------------------------------------------- #
+# 64-hex digest for fixture use only (distinct from the score digests above).
+DIGEST_ARTIFACT = "sha256:" + "e" * 64
+
+MANIFEST_ARTIFACT_NAMES = [
+    "raw_response",
+    "agent_answer",
+    "run_metadata",
+    "policy_result",
+    "blind_input",
+    "judge_a",
+    "judge_b",
+    "judge_c",
+    "judge_score",
+    "adjudication",
+    "effective_score",
+]
+MANIFEST_STATUSES = ["present", "absent", "failed", "not_applicable"]
+
+
+FULL_MANIFEST: dict[str, Any] = {
+    "schema_version": "manifest-v1",
+    "artifacts": [
+        {
+            "name": "raw_response",
+            "status": "present",
+            "path": "run/raw-response.txt",
+            "sha256": DIGEST_ARTIFACT,
+        },
+        {
+            "name": "agent_answer",
+            "status": "present",
+            "path": "run/agent-answer.json",
+            "sha256": DIGEST_ARTIFACT,
+        },
+        {
+            "name": "run_metadata",
+            "status": "present",
+            "path": "run/run-metadata.json",
+            "sha256": DIGEST_ARTIFACT,
+        },
+        {
+            "name": "policy_result",
+            "status": "present",
+            "path": "run/policy-result.json",
+            "sha256": DIGEST_ARTIFACT,
+        },
+        {
+            "name": "blind_input",
+            "status": "present",
+            "path": "run/judge/blind-input.json",
+            "sha256": DIGEST_ARTIFACT,
+        },
+        {
+            "name": "judge_a",
+            "status": "present",
+            "path": "run/judge/judge-a.json",
+            "sha256": DIGEST_ARTIFACT,
+        },
+        {
+            "name": "judge_b",
+            "status": "present",
+            "path": "run/judge/judge-b.json",
+            "sha256": DIGEST_ARTIFACT,
+        },
+        {"name": "judge_c", "status": "absent"},
+        {
+            "name": "judge_score",
+            "status": "present",
+            "path": "run/judge-score.json",
+            "sha256": DIGEST_ARTIFACT,
+        },
+        {"name": "adjudication", "status": "not_applicable"},
+        {
+            "name": "effective_score",
+            "status": "present",
+            "path": "run/effective-score.json",
+            "sha256": DIGEST_ARTIFACT,
+        },
+    ],
+}
+
+MINIMAL_MANIFEST: dict[str, Any] = {
+    "schema_version": "manifest-v1",
+    "artifacts": [
+        {
+            "name": "raw_response",
+            "status": "present",
+            "path": "run/raw-response.txt",
+            "sha256": DIGEST_ARTIFACT,
+        }
+    ],
+}
+
+
+def manifest_with_unknown_name() -> dict[str, Any]:
+    """An artifact name outside the allowed set."""
+    bad = copy.deepcopy(MINIMAL_MANIFEST)
+    bad["artifacts"][0]["name"] = "raw_response_bad"
+    return bad
+
+
+def manifest_with_unknown_status() -> dict[str, Any]:
+    """A status outside the allowed set."""
+    bad = copy.deepcopy(MINIMAL_MANIFEST)
+    bad["artifacts"][0]["status"] = "missing"
+    return bad
+
+
+def manifest_present_missing_path() -> dict[str, Any]:
+    """A present entry without a path."""
+    bad = copy.deepcopy(MINIMAL_MANIFEST)
+    del bad["artifacts"][0]["path"]
+    return bad
+
+
+def manifest_present_missing_digest() -> dict[str, Any]:
+    """A present entry without a sha256 digest."""
+    bad = copy.deepcopy(MINIMAL_MANIFEST)
+    del bad["artifacts"][0]["sha256"]
+    return bad
+
+
+def manifest_present_invalid_path() -> dict[str, Any]:
+    """A present entry with an absolute (non-repository-relative) path."""
+    bad = copy.deepcopy(MINIMAL_MANIFEST)
+    bad["artifacts"][0]["path"] = "/abs/run/raw-response.txt"
+    return bad
+
+
+def manifest_present_invalid_digest() -> dict[str, Any]:
+    """A present entry with a malformed sha256 digest."""
+    bad = copy.deepcopy(MINIMAL_MANIFEST)
+    bad["artifacts"][0]["sha256"] = "not-a-digest"
+    return bad
+
+
+def manifest_adjudication_wrong_status() -> dict[str, Any]:
+    """v1 adjudication with a status other than not_applicable."""
+    bad = copy.deepcopy(MINIMAL_MANIFEST)
+    bad["artifacts"][0] = {"name": "adjudication", "status": "absent"}
+    return bad
+
+
+def manifest_non_present_with_placeholder() -> dict[str, Any]:
+    """A non-present entry carrying a path/digest placeholder."""
+    bad = copy.deepcopy(MINIMAL_MANIFEST)
+    bad["artifacts"][0] = {
+        "name": "judge_c",
+        "status": "absent",
+        "path": "run/judge/judge-c.json",
+        "sha256": DIGEST_ARTIFACT,
+    }
     return bad

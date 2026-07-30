@@ -71,3 +71,22 @@ def test_bad_answer_evidence_pointer_rejected() -> None:
         validate_answer_evidence_pointers(bad, ex.FULL_AGENT_ANSWER)
     assert exc_info.value.pointer == "/items/0/answer_evidence/0/json_pointer"
     assert "no-such-field" in exc_info.value.message
+
+
+def test_mismatched_answer_evidence_quote_rejected() -> None:
+    # Correct json_pointer (resolves to /answer/summary) but the quote is absent
+    # from the referenced text (R5).
+    bad = ex.judge_output_with_mismatched_quote()
+    with pytest.raises(ContractError) as exc_info:
+        validate_answer_evidence_pointers(bad, ex.FULL_AGENT_ANSWER)
+    assert exc_info.value.pointer == "/items/0/answer_evidence/0/quote"
+    assert "not found" in exc_info.value.message
+
+
+def test_non_text_answer_evidence_pointer_rejected() -> None:
+    # A json_pointer that resolves to a non-text node is not referenceable text (R5).
+    bad = ex.judge_output_with_non_text_pointer()
+    with pytest.raises(ContractError) as exc_info:
+        validate_answer_evidence_pointers(bad, ex.FULL_AGENT_ANSWER)
+    assert exc_info.value.pointer == "/items/0/answer_evidence/0/json_pointer"
+    assert "non-text" in exc_info.value.message

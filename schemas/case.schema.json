@@ -1,0 +1,45 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://graphbenchmark.dev/schemas/case.schema.json",
+  "title": "Case",
+  "description": "A benchmark case: the original problem statement handed to the agent under test. The case carries only the question and optional repository context; it never contains the GT rubric, agent identity, tool policy or cost data (see docs/ai-scoring-design.md §8.1, §9.1). Business version is locked via schema_version.",
+  "type": "object",
+  "required": ["schema_version", "case_id", "task_type", "question"],
+  "additionalProperties": false,
+  "properties": {
+    "schema_version": {
+      "const": "case-v1",
+      "description": "Locked business version for the case contract."
+    },
+    "case_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "task_type": {
+      "enum": ["flow_tracing", "bug_localization", "impact_analysis"]
+    },
+    "question": {
+      "type": "string",
+      "minLength": 1,
+      "description": "The complete, self-contained problem statement shown to the agent."
+    },
+    "repo": {
+      "type": "object",
+      "required": ["url", "revision"],
+      "additionalProperties": false,
+      "properties": {
+        "url": {
+          "type": "string",
+          "minLength": 1
+        },
+        "revision": {
+          "type": "string",
+          "minLength": 1
+        },
+        "root_path": {
+          "type": "string"
+        }
+      }
+    }
+  }
+}

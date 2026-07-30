@@ -1,0 +1,222 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://graphbenchmark.dev/schemas/score.schema.json",
+  "title": "Score",
+  "description": "Deterministic aggregation result and the formal view consumed by reports (see docs/ai-scoring-design.md §11, §20). Every formal score carries full protocol/model/prompt/input-digest identity so that scores across incompatible protocols, profiles, models, prompts, GT revisions or consensus versions cannot be mixed (invariant). The effective item credit in v1 always equals the Judge consensus credit (DEC-001 #8). Business version is locked via schema_version.",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "benchmark_version",
+    "judge_protocol",
+    "scoring_profile",
+    "judge_provider",
+    "judge_model",
+    "judge_cli_version",
+    "judge_prompt_digest",
+    "ground_truth_digest",
+    "agent_answer_digest",
+    "case_id",
+    "task_type",
+    "items",
+    "dimension_totals",
+    "raw_total",
+    "critical_cap",
+    "capped_total",
+    "consensus",
+    "requires_human_review",
+    "run_mode"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "schema_version": {
+      "const": "score-v1",
+      "description": "Locked business version for the score contract."
+    },
+    "benchmark_version": {
+      "const": "ai-score-v1"
+    },
+    "judge_protocol": {
+      "const": "semantic_outcome_v1"
+    },
+    "scoring_profile": {
+      "enum": ["flow_tracing_v1", "bug_localization_v1", "impact_analysis_v1"]
+    },
+    "judge_provider": {
+      "const": "claude-code-cli"
+    },
+    "judge_model": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Pinned Judge model; 'Auto'/'latest' are not permitted (DEC-001 #6)."
+    },
+    "judge_cli_version": {
+      "type": "string",
+      "minLength": 1
+    },
+    "judge_prompt_digest": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    },
+    "ground_truth_digest": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    },
+    "agent_answer_digest": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    },
+    "case_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "task_type": {
+      "enum": ["flow_tracing", "bug_localization", "impact_analysis"]
+    },
+    "items": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "$ref": "#/$defs/itemScore"
+      }
+    },
+    "dimension_totals": {
+      "type": "object",
+      "required": [
+        "core_correctness",
+        "reasoning_correctness",
+        "completeness",
+        "scope_precision",
+        "evidence_actionability"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "core_correctness": {
+          "type": "number",
+          "minimum": 0
+        },
+        "reasoning_correctness": {
+          "type": "number",
+          "minimum": 0
+        },
+        "completeness": {
+          "type": "number",
+          "minimum": 0
+        },
+        "scope_precision": {
+          "type": "number",
+          "minimum": 0
+        },
+        "evidence_actionability": {
+          "type": "number",
+          "minimum": 0
+        }
+      }
+    },
+    "raw_total": {
+      "type": "number",
+      "minimum": 0,
+      "maximum": 100
+    },
+    "critical_cap": {
+      "description": "Critical-failure cap applied to the raw total; null when no cap applies (§12). Multiple caps take the lowest (DEC-001 #4).",
+      "oneOf": [
+        {
+          "type": "null"
+        },
+        {
+          "type": "object",
+          "required": ["applied", "cap_value", "code"],
+          "additionalProperties": false,
+          "properties": {
+            "applied": {
+              "type": "boolean"
+            },
+            "cap_value": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 100
+            },
+            "code": {
+              "type": "string",
+              "minLength": 1
+            },
+            "reason": {
+              "type": "string"
+            }
+          }
+        }
+      ]
+    },
+    "capped_total": {
+      "type": "number",
+      "minimum": 0,
+      "maximum": 100
+    },
+    "consensus": {
+      "$ref": "#/$defs/consensus"
+    },
+    "requires_human_review": {
+      "type": "boolean"
+    },
+    "run_mode": {
+      "enum": ["development", "formal"],
+      "description": "Reports must state which Judge mode was used (§13.2)."
+    }
+  },
+  "$defs": {
+    "itemScore": {
+      "type": "object",
+      "required": ["item_id", "dimension", "points", "consensus_credit", "item_score"],
+      "additionalProperties": false,
+      "properties": {
+        "item_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "dimension": {
+          "enum": [
+            "core_correctness",
+            "reasoning_correctness",
+            "completeness",
+            "scope_precision",
+            "evidence_actionability"
+          ]
+        },
+        "points": {
+          "type": "number",
+          "exclusiveMinimum": 0
+        },
+        "consensus_credit": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1,
+          "description": "Exact mean (no arbiter) or median (arbiter); may be a non-discrete value (§10.1)."
+        },
+        "item_score": {
+          "type": "number",
+          "minimum": 0
+        }
+      }
+    },
+    "consensus": {
+      "type": "object",
+      "required": ["mode", "judges", "arbiter_used"],
+      "additionalProperties": false,
+      "properties": {
+        "mode": {
+          "enum": ["single", "mean", "median"]
+        },
+        "judges": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "arbiter_used": {
+          "type": "boolean"
+        },
+        "human_review_triggered": {
+          "type": "boolean"
+        }
+      }
+    }
+  }
+}

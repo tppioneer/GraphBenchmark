@@ -1,0 +1,90 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://graphbenchmark.dev/schemas/run-metadata.schema.json",
+  "title": "Run Metadata",
+  "description": "Identity, timing and cost metrics collected by the Runner. The agent never self-reports these fields (see docs/ai-scoring-design.md §8.6). Business version is locked via schema_version.",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "agent",
+    "agent_model",
+    "tool_policy",
+    "policy_enforced",
+    "started_at",
+    "ended_at",
+    "metrics"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "schema_version": {
+      "const": "run-metadata-v1",
+      "description": "Locked business version for the run-metadata contract."
+    },
+    "agent": {
+      "type": "string",
+      "minLength": 1
+    },
+    "agent_model": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Pinned model name; 'Auto'/'latest' are not permitted (DEC-001 #6)."
+    },
+    "tool_policy": {
+      "enum": ["graph", "grep", "mixed"]
+    },
+    "policy_enforced": {
+      "type": "boolean"
+    },
+    "started_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "ended_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "metrics": {
+      "type": "object",
+      "required": [
+        "tool_call_count",
+        "files_read_count",
+        "graph_query_count",
+        "search_query_count",
+        "elapsed_ms",
+        "input_tokens",
+        "output_tokens"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "tool_call_count": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "files_read_count": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "graph_query_count": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "search_query_count": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "elapsed_ms": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "input_tokens": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "output_tokens": {
+          "type": "integer",
+          "minimum": 0
+        }
+      }
+    }
+  }
+}

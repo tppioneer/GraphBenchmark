@@ -1,0 +1,242 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://graphbenchmark.dev/schemas/agent-answer.schema.json",
+  "title": "Agent Answer",
+  "description": "The agent's submitted final answer: a natural-language explanation plus optional structured findings and evidence (see docs/ai-scoring-design.md §8.2-§8.5). answer.explanation is the primary, independently scorable answer; missing optional structure must not zero out core correctness. The agent never sees or emits GT rubric item ids, and this artifact MUST NOT carry Runner-collected identity, tool, policy or cost fields (invariant). additionalProperties=false at every level enforces that boundary. Business version is locked via schema_version.",
+  "type": "object",
+  "required": ["schema_version", "case_id", "task_type", "status", "answer"],
+  "additionalProperties": false,
+  "properties": {
+    "schema_version": {
+      "const": "agent-answer-v1",
+      "description": "Locked business version for the agent-answer contract."
+    },
+    "case_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "task_type": {
+      "enum": ["flow_tracing", "bug_localization", "impact_analysis"]
+    },
+    "status": {
+      "enum": [
+        "completed",
+        "completed_with_schema_warning",
+        "empty",
+        "refused",
+        "invalid"
+      ]
+    },
+    "answer": {
+      "type": "object",
+      "required": ["summary", "explanation"],
+      "additionalProperties": false,
+      "properties": {
+        "summary": {
+          "type": "string",
+          "minLength": 1
+        },
+        "explanation": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Complete, self-contained Markdown; the primary scored content."
+        },
+        "findings": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/finding"
+          }
+        },
+        "limitations": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "recommended_actions": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "evidence": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/evidence"
+      }
+    },
+    "task_details": {
+      "type": "object",
+      "additionalProperties": true,
+      "description": "Optional task-specific reporting structure (see §8.4). Missing task_details does not zero correctness."
+    }
+  },
+  "$defs": {
+    "finding": {
+      "type": "object",
+      "required": ["id", "kind", "claim"],
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Finding id local to this answer; never a GT rubric item id."
+        },
+        "kind": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Organizational label; constrained per task_type via allOf below."
+        },
+        "claim": {
+          "type": "string",
+          "minLength": 1
+        },
+        "evidence_ids": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        }
+      }
+    },
+    "evidence": {
+      "type": "object",
+      "required": ["id", "file", "reason"],
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "file": {
+          "type": "string",
+          "minLength": 1
+        },
+        "symbol": {
+          "type": "string"
+        },
+        "line": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "reason": {
+          "type": "string",
+          "minLength": 1
+        },
+        "excerpt": {
+          "type": "string"
+        }
+      }
+    }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "task_type": {
+            "const": "flow_tracing"
+          }
+        },
+        "required": ["task_type"]
+      },
+      "then": {
+        "properties": {
+          "answer": {
+            "properties": {
+              "findings": {
+                "items": {
+                  "properties": {
+                    "kind": {
+                      "enum": [
+                        "entrypoint",
+                        "flow_relation",
+                        "data_flow",
+                        "branch",
+                        "async_boundary",
+                        "terminal_behavior",
+                        "scope_exclusion"
+                      ]
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "task_type": {
+            "const": "bug_localization"
+          }
+        },
+        "required": ["task_type"]
+      },
+      "then": {
+        "properties": {
+          "answer": {
+            "properties": {
+              "findings": {
+                "items": {
+                  "properties": {
+                    "kind": {
+                      "enum": [
+                        "symptom",
+                        "root_cause",
+                        "trigger_condition",
+                        "failure_chain",
+                        "blast_radius",
+                        "false_cause_exclusion",
+                        "fix_direction"
+                      ]
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "task_type": {
+            "const": "impact_analysis"
+          }
+        },
+        "required": ["task_type"]
+      },
+      "then": {
+        "properties": {
+          "answer": {
+            "properties": {
+              "findings": {
+                "items": {
+                  "properties": {
+                    "kind": {
+                      "enum": [
+                        "target",
+                        "direct_impact",
+                        "indirect_impact",
+                        "dependency_relation",
+                        "risk",
+                        "scope_exclusion",
+                        "validation"
+                      ]
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  ]
+}

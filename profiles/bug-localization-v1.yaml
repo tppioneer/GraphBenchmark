@@ -1,0 +1,40 @@
+# Bug localization task profile (extends common-v1).
+#
+# Adds task-specific dimension semantics, finding kinds and allowed
+# critical-error codes only. It does NOT redefine dimension weights and does
+# NOT override the common Judge output protocol (judge_protocol stays
+# semantic_outcome_v1). See docs/ai-scoring-design.md §6.1, §8.3, §7.1.
+profile_version: bug-localization-v1
+base: common-v1
+task_type: bug_localization
+judge_protocol: semantic_outcome_v1
+
+dimension_semantics:
+  core_correctness: >-
+    Root cause, trigger condition and failure outcome.
+  reasoning_correctness: >-
+    The root-cause-to-failure failure chain.
+  completeness: >-
+    Blast radius, related read/write paths and recovery behavior.
+  scope_precision: >-
+    Excluding false root causes, symptoms and unrelated modules.
+  evidence_actionability: >-
+    Root-cause evidence, fix and test direction.
+
+finding_kinds:
+  - symptom
+  - root_cause
+  - trigger_condition
+  - failure_chain
+  - blast_radius
+  - false_cause_exclusion
+  - fix_direction
+
+required_finding_kinds:
+  - root_cause
+  - failure_chain
+
+# Subset of the common critical-error codes (DEC-001 #4).
+critical_error_codes:
+  - core_correctness_all_zero
+  - reverse_critical_relation_zero

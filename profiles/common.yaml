@@ -1,0 +1,67 @@
+# Common scoring profile for semantic_outcome_v1.
+#
+# Defines the frozen first-level result dimensions and weights (DEC-001 #1),
+# the Judge credit set (DEC-001 #2), the critical-failure cap rules (DEC-001 #4)
+# and the consensus / human-review thresholds (DEC-001 #5). Task profiles extend
+# this common base; they MUST NOT redefine dimension weights or override the
+# common Judge output protocol (see docs/ai-scoring-design.md §5, §6.2, §12,
+# §13.1). Dimension weights are frozen at 35/25/20/10/10 and sum to 100.
+profile_version: common-v1
+judge_protocol: semantic_outcome_v1
+
+dimensions:
+  - name: core_correctness
+    weight: 35
+    description: >-
+      Whether the answer states the correct primary conclusion.
+  - name: reasoning_correctness
+    weight: 25
+    description: >-
+      Whether calls, causal or dependency relations and their direction are correct.
+  - name: completeness
+    weight: 20
+    description: >-
+      Whether key branches, scope and outcomes are covered.
+  - name: scope_precision
+    weight: 10
+    description: >-
+      Whether wrong targets, false root causes or unsupported claims are excluded.
+  - name: evidence_actionability
+    weight: 10
+    description: >-
+      Whether source-backed evidence is present and sufficient to guide action.
+
+# Frozen single-Judge credit set (DEC-001 #2). Consensus credit may be an exact
+# mean/median and is not restricted to this set.
+credit_set: [0, 0.25, 0.5, 0.75, 1]
+
+# Critical-failure caps (DEC-001 #4, docs/ai-scoring-design.md §12). A cap is
+# triggered only by a Profile-declared critical-error code on a critical item;
+# ordinary omissions never trigger a cap. Multiple caps take the lowest.
+critical_caps:
+  - code: core_correctness_all_zero
+    description: >-
+      Every core_correctness critical item has consensus_credit 0.
+    cap: 50
+  - code: reverse_critical_relation_zero
+    description: >-
+      A Profile-allowed explicit reverse critical relation has consensus_credit 0.
+    cap: 60
+cap_selection: min
+
+# Status enforcement for executed runs (DEC-001 #4, §12).
+status_enforcement:
+  empty_or_refused_or_irrelevant_score: 0
+  execution_or_artifact_failure: invalid
+
+# Consensus and human-review thresholds (DEC-001 #5, §13.1). Confidence routes
+# to human review only; it is never multiplied into credit or totals.
+consensus:
+  judges: 2
+  arbiter: true
+  critical_item_disagreement_triggers_arbiter: true
+  noncritical_credit_diff_threshold: 0.25
+  provisional_total_diff_threshold: 5
+  critical_credit_range_threshold: 0.5
+  critical_consensus_confidence_threshold: 0.70
+  overall_confidence_threshold: 0.65

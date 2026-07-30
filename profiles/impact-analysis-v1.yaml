@@ -1,0 +1,40 @@
+# Impact analysis task profile (extends common-v1).
+#
+# Adds task-specific dimension semantics, finding kinds and allowed
+# critical-error codes only. It does NOT redefine dimension weights and does
+# NOT override the common Judge output protocol (judge_protocol stays
+# semantic_outcome_v1). See docs/ai-scoring-design.md §6.1, §8.3.
+profile_version: impact-analysis-v1
+base: common-v1
+task_type: impact_analysis
+judge_protocol: semantic_outcome_v1
+
+dimension_semantics:
+  core_correctness: >-
+    Primary impact targets and overall risk.
+  reasoning_correctness: >-
+    Upstream/downstream dependencies and impact-propagation chains.
+  completeness: >-
+    Direct, indirect impact and validation scope.
+  scope_precision: >-
+    Excluding same-name symbols and non-real dependencies.
+  evidence_actionability: >-
+    Dependency evidence, risk and validation advice.
+
+finding_kinds:
+  - target
+  - direct_impact
+  - indirect_impact
+  - dependency_relation
+  - risk
+  - scope_exclusion
+  - validation
+
+required_finding_kinds:
+  - target
+  - direct_impact
+
+# Subset of the common critical-error codes (DEC-001 #4).
+critical_error_codes:
+  - core_correctness_all_zero
+  - reverse_critical_relation_zero

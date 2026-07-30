@@ -10,3 +10,13 @@ pluggy==1.6.0
 Pygments==2.20.0
 pytest==9.1.1
 ruff==0.16.0
+
+# Schema and YAML validation (AIS-002): jsonschema + PyYAML and their
+# transitive runtime dependencies.
+attrs==26.1.0
+jsonschema==4.26.0
+jsonschema-specifications==2025.9.1
+PyYAML==6.0.3
+referencing==0.37.0
+rpds-py==2026.6.3
+typing_extensions==4.16.0

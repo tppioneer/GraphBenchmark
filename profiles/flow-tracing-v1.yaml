@@ -1,0 +1,41 @@
+# Flow tracing task profile (extends common-v1).
+#
+# Adds task-specific dimension semantics, finding kinds and allowed
+# critical-error codes only. It does NOT redefine dimension weights and does
+# NOT override the common Judge output protocol (judge_protocol stays
+# semantic_outcome_v1). See docs/ai-scoring-design.md §6.1, §8.3.
+profile_version: flow-tracing-v1
+base: common-v1
+task_type: flow_tracing
+judge_protocol: semantic_outcome_v1
+
+dimension_semantics:
+  core_correctness: >-
+    Entrypoints, endpoints and final observable behavior.
+  reasoning_correctness: >-
+    Call chains, data flow, direction and async boundaries.
+  completeness: >-
+    Branches, fallbacks, persistence and event propagation.
+  scope_precision: >-
+    Excluding similar but unrelated paths.
+  evidence_actionability: >-
+    Source anchors and flow explanation.
+
+finding_kinds:
+  - entrypoint
+  - flow_relation
+  - data_flow
+  - branch
+  - async_boundary
+  - terminal_behavior
+  - scope_exclusion
+
+required_finding_kinds:
+  - entrypoint
+  - flow_relation
+  - terminal_behavior
+
+# Subset of the common critical-error codes (DEC-001 #4).
+critical_error_codes:
+  - core_correctness_all_zero
+  - reverse_critical_relation_zero

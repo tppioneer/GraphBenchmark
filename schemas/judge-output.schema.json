@@ -1,0 +1,142 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://graphbenchmark.dev/schemas/judge-output.schema.json",
+  "title": "Judge Output",
+  "description": "Per-rubric-item semantic verdicts returned by an AI Judge (see docs/ai-scoring-design.md §10). The Judge never emits a free-form total; it returns discrete credit from the frozen set, per-item reason/confidence, answer evidence pointers, unsupported claims and critical errors. Single-Judge credit must belong to {0, 0.25, 0.5, 0.75, 1}; consensus credit (produced by aggregation, not the Judge) may be an exact mean/median and lives in score.json. Cross-document checks (every GT item appears exactly once, no unknown items, critical-error codes declared by the Profile, answer_evidence pointers resolve against the answer) are enforced by judge/judge-output validation and are out of scope for AIS-002 production code; they are exercised by tests. Business version is locked via schema_version.",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "judge_protocol",
+    "scoring_profile",
+    "items",
+    "unsupported_claims",
+    "critical_errors",
+    "overall_confidence",
+    "requires_human_review"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "schema_version": {
+      "const": "judge-output-v1",
+      "description": "Locked business version for the judge-output contract."
+    },
+    "judge_protocol": {
+      "const": "semantic_outcome_v1"
+    },
+    "scoring_profile": {
+      "enum": ["flow_tracing_v1", "bug_localization_v1", "impact_analysis_v1"]
+    },
+    "items": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "$ref": "#/$defs/itemVerdict"
+      }
+    },
+    "unsupported_claims": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/unsupportedClaim"
+      }
+    },
+    "critical_errors": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/criticalError"
+      }
+    },
+    "overall_confidence": {
+      "type": "number",
+      "minimum": 0,
+      "maximum": 1
+    },
+    "requires_human_review": {
+      "type": "boolean"
+    }
+  },
+  "$defs": {
+    "itemVerdict": {
+      "type": "object",
+      "required": ["item_id", "credit", "verdict", "reason", "confidence"],
+      "additionalProperties": false,
+      "properties": {
+        "item_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "credit": {
+          "enum": [0, 0.25, 0.5, 0.75, 1],
+          "description": "Frozen single-Judge credit set (DEC-001 #2)."
+        },
+        "verdict": {
+          "type": "string",
+          "minLength": 1
+        },
+        "answer_evidence": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["json_pointer", "quote"],
+            "additionalProperties": false,
+            "properties": {
+              "json_pointer": {
+                "type": "string",
+                "minLength": 1,
+                "pattern": "^/",
+                "description": "RFC 6901 JSON Pointer into the blind answer payload."
+              },
+              "quote": {
+                "type": "string",
+                "minLength": 1
+              }
+            }
+          }
+        },
+        "reason": {
+          "type": "string",
+          "minLength": 1
+        },
+        "confidence": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        }
+      }
+    },
+    "unsupportedClaim": {
+      "type": "object",
+      "required": ["claim", "reason"],
+      "additionalProperties": false,
+      "properties": {
+        "claim": {
+          "type": "string",
+          "minLength": 1
+        },
+        "reason": {
+          "type": "string",
+          "minLength": 1
+        }
+      }
+    },
+    "criticalError": {
+      "type": "object",
+      "required": ["item_id", "code", "reason"],
+      "additionalProperties": false,
+      "properties": {
+        "item_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "code": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Must be a critical-error code declared by the Profile (cross-document check)."
+        },
+        "reason": {
+          "type": "string",
+          "minLength": 1
+        }
+      }
+    }
+  }
+}

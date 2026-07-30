@@ -16,6 +16,8 @@ graphbenchmark = "runner.benchmark_runner:main"
 dev = [
     "pytest>=8.0",
     "ruff>=0.6",
+    "jsonschema>=4.20",
+    "PyYAML>=6.0",
 ]
 
 [tool.setuptools]

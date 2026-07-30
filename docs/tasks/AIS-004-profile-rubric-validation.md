@@ -1,6 +1,6 @@
 # AIS-004: 加载 Profile 并验证 Ground Truth Rubric
 
-State: READY
+State: IMPLEMENTING
 
 ## Objective
 

@@ -1,6 +1,6 @@
 # AIS-007: 生成盲评输入、digest 与缓存键
 
-State: READY
+State: IMPLEMENTING
 
 ## Objective
 

@@ -46,3 +46,14 @@ Verdict: `CHANGES_REQUIRED`
 - Verification: task tests `28 passed`; full suite `195 passed`; ruff, format, pip check, and diff check passed.
 
 Next remediation must package runtime Schema/Profile resources and load them through an installed-package-safe mechanism. Remove the unrelated `PyYAML` dev-only assertion from AIS-003 tests; runtime ownership of `PyYAML` belongs to AIS-004.
+
+## Remediation round 2 review
+
+Reviewed range: `e9b2795bc12c2c06576741dc3f476513cb0f7b60..d8b81c8b140a28e10631d98f9b742c6f72683c8b`
+
+Verdict: `PASS`
+
+- `AIS003-R1`: remains resolved; the existing Runner-authoritative identity behavior is retained.
+- `AIS003-R2`: resolved. The Schema is packaged in a `schemas` resource package and the validator reads it with `importlib.resources`.
+- Independent wheel verification: built the submitted wheel, confirmed `schemas/agent-answer.schema.json` is present, installed it into an isolated target, then ran `agent_answer_schema_issues({})` with `python -I` from a neutral directory. Validation loaded the packaged Schema and returned five expected issues.
+- Verification: full suite `196 passed`; Ruff check, format check, pip check, and diff check passed.

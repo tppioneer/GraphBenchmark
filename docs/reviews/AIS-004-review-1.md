@@ -46,3 +46,14 @@ Verdict: `CHANGES_REQUIRED`
 - Verification: task tests `98 passed`; full suite `265 passed`; ruff, format, pip check, and diff check passed.
 
 Next remediation must validate Schema structure before task-dependent Profile loading, return deterministic Schema issues for invalid/missing task identity, and package/load Schema/Profile resources safely from an installed wheel.
+
+## Remediation round 2 review
+
+Reviewed range: `763d3c1df818dce5dc8783b79258932c01cd84d0..4491a2a7dd5eb6f437da94f48ca00ae0e1a279ab`
+
+Verdict: `PASS`
+
+- `AIS004-R1`: resolved. Structural Schema validation runs before Profile lookup. Unknown or malformed task identity returns deterministic schema and business-rule issues rather than `ProfileError`.
+- `AIS004-R2`: resolved. Schema and YAML Profile resources are packaged and loaded with `importlib.resources`; `jsonschema` and `PyYAML` remain runtime dependencies.
+- Independent wheel verification: built the submitted wheel, confirmed the GT Schema plus `common.yaml` and `bug-localization-v1.yaml` are present, installed it into an isolated target, then loaded `bug_localization` and validated an invalid task identity with `python -I` from a neutral directory. Resource loading succeeded and returned structured issue codes.
+- Verification: full suite `274 passed`; Ruff check, format check, pip check, and diff check passed.

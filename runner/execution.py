@@ -169,9 +169,32 @@ def produce_agent_artifacts(
             run_dir, case_id, task_type, text, raw_response_path, raw_sha, note=note
         )
 
-    # 6. Valid structured answer -> canonical write. The model's declared
-    #    status is schema-validated, so it is a known enum value.
-    canonical = _canonical_json(parsed)
+    # 6. Enforce Runner-authoritative identity (AIS003-R1). The schema only
+    #    constrains case_id to a non-empty string and task_type to the enum;
+    #    it does not assert they match the run the Runner actually dispatched.
+    #    A schema-valid document whose declared case_id or task_type differs
+    #    from the authoritative function arguments is deterministically
+    #    downgraded to the schema-warning wrapper (the model's raw text is
+    #    preserved verbatim). The artifact never carries the model's claimed
+    #    identity.
+    mismatch_note = _identity_mismatch_note(parsed, case_id, task_type)
+    if mismatch_note is not None:
+        return _wrap_schema_warning(
+            run_dir,
+            case_id,
+            task_type,
+            text,
+            raw_response_path,
+            raw_sha,
+            note=mismatch_note,
+        )
+
+    # 7. Valid structured answer -> canonical write. Stamp the artifact with
+    #    Runner-authoritative identity so it can never carry the model's
+    #    claimed identity even if the upstream check changes. The model's
+    #    declared status is schema-validated, so it is a known enum value.
+    authoritative = {**parsed, "case_id": case_id, "task_type": task_type}
+    canonical = _canonical_json(authoritative)
     agent_path = run_dir / AGENT_ANSWER_FILENAME
     _atomic_write_text(agent_path, canonical)
     agent_sha = _sha256_digest(canonical.encode("utf-8"))
@@ -189,6 +212,27 @@ def produce_agent_artifacts(
 # --------------------------------------------------------------------------- #
 # Document builders
 # --------------------------------------------------------------------------- #
+
+
+def _identity_mismatch_note(parsed: dict[str, Any], case_id: str, task_type: str) -> str | None:
+    """Return a downgrade note if the model's declared identity differs from
+    the Runner-authoritative arguments, else ``None``.
+
+    The JSON Schema only constrains ``case_id`` to a non-empty string and
+    ``task_type`` to the task-type enum; it does not assert they match the run
+    the Runner actually dispatched (AIS003-R1). This check runs only after
+    schema validation, so both fields are present and individually valid here;
+    a value mismatch is a deterministic downgrade to the schema-warning
+    wrapper. The returned note names the offending field(s) for auditability.
+    """
+    mismatches: list[str] = []
+    if parsed.get("case_id") != case_id:
+        mismatches.append("case_id")
+    if parsed.get("task_type") != task_type:
+        mismatches.append("task_type")
+    if not mismatches:
+        return None
+    return "identity_mismatch:" + ",".join(mismatches)
 
 
 def _build_status_doc(case_id: str, task_type: str, status: AgentAnswerStatus) -> dict[str, Any]:

@@ -374,6 +374,99 @@ def test_empty_case_id_raises(tmp_path: Path) -> None:
 
 
 # --------------------------------------------------------------------------- #
+# Runner-authoritative identity (AIS003-R1)
+# --------------------------------------------------------------------------- #
+
+
+def test_case_id_mismatch_downgraded(tmp_path: Path) -> None:
+    """A schema-valid doc whose case_id differs from the authoritative arg is
+    downgraded; the artifact carries Runner-authoritative identity, never the
+    model's claimed case_id."""
+    doc = fx.completed_answer_doc()
+    doc["case_id"] = "some-other-case-id"
+    raw = json.dumps(doc, ensure_ascii=False).encode("utf-8")
+    result = exe.produce_agent_artifacts(
+        raw,
+        case_id=fx.CASE_ID,
+        task_type=fx.TASK_TYPE,
+        run_dir=tmp_path,
+    )
+    assert result.status is exe.AgentAnswerStatus.COMPLETED_WITH_SCHEMA_WARNING
+    assert result.note == "identity_mismatch:case_id"
+    written = json.loads((tmp_path / ANSWER).read_text(encoding="utf-8"))
+    # Authoritative identity, not the model's claim.
+    assert written["case_id"] == fx.CASE_ID
+    assert written["task_type"] == fx.TASK_TYPE
+    # Raw model text preserved verbatim in the degradation wrapper.
+    assert written["answer"]["explanation"] == raw.decode("utf-8")
+    # The wrapper is itself schema-valid.
+    assert not list(fx.agent_answer_validator().iter_errors(written))
+
+
+def test_task_type_mismatch_downgraded(tmp_path: Path) -> None:
+    """A schema-valid doc whose task_type differs from the authoritative arg is
+    downgraded; the artifact carries Runner-authoritative identity.
+
+    The doc carries no findings, so it is schema-valid under the model's
+    claimed task_type (impact_analysis) and the mismatch is caught purely by
+    the identity check rather than the task_type-conditional finding enum.
+    """
+    doc = fx.completed_answer_doc()
+    doc["task_type"] = "impact_analysis"
+    doc["answer"]["findings"] = []
+    doc["evidence"] = []
+    raw = json.dumps(doc, ensure_ascii=False).encode("utf-8")
+    result = exe.produce_agent_artifacts(
+        raw,
+        case_id=fx.CASE_ID,
+        task_type=fx.TASK_TYPE,
+        run_dir=tmp_path,
+    )
+    assert result.status is exe.AgentAnswerStatus.COMPLETED_WITH_SCHEMA_WARNING
+    assert result.note == "identity_mismatch:task_type"
+    written = json.loads((tmp_path / ANSWER).read_text(encoding="utf-8"))
+    assert written["case_id"] == fx.CASE_ID
+    assert written["task_type"] == fx.TASK_TYPE
+    assert not list(fx.agent_answer_validator().iter_errors(written))
+
+
+def test_both_identity_fields_mismatch_downgraded(tmp_path: Path) -> None:
+    """Both fields mismatching are reported together in the audit note."""
+    doc = fx.completed_answer_doc()
+    doc["case_id"] = "other-case"
+    doc["task_type"] = "flow_tracing"
+    doc["answer"]["findings"] = []
+    doc["evidence"] = []
+    raw = json.dumps(doc, ensure_ascii=False).encode("utf-8")
+    result = exe.produce_agent_artifacts(
+        raw,
+        case_id=fx.CASE_ID,
+        task_type=fx.TASK_TYPE,
+        run_dir=tmp_path,
+    )
+    assert result.status is exe.AgentAnswerStatus.COMPLETED_WITH_SCHEMA_WARNING
+    assert result.note == "identity_mismatch:case_id,task_type"
+
+
+def test_matching_identity_completed_carries_authoritative_identity(
+    tmp_path: Path,
+) -> None:
+    """A schema-valid doc with matching case_id/task_type is accepted as
+    completed and the artifact carries Runner-authoritative identity."""
+    result = exe.produce_agent_artifacts(
+        fx.completed_answer_bytes(),
+        case_id=fx.CASE_ID,
+        task_type=fx.TASK_TYPE,
+        run_dir=tmp_path,
+    )
+    assert result.status is exe.AgentAnswerStatus.COMPLETED
+    assert result.note == "parsed_valid"
+    written = json.loads((tmp_path / ANSWER).read_text(encoding="utf-8"))
+    assert written["case_id"] == fx.CASE_ID
+    assert written["task_type"] == fx.TASK_TYPE
+
+
+# --------------------------------------------------------------------------- #
 # Direct artifact_validation contract
 # --------------------------------------------------------------------------- #
 

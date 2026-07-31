@@ -57,3 +57,9 @@ Verdict: `PASS`
 - `AIS003-R2`: resolved. The Schema is packaged in a `schemas` resource package and the validator reads it with `importlib.resources`.
 - Independent wheel verification: built the submitted wheel, confirmed `schemas/agent-answer.schema.json` is present, installed it into an isolated target, then ran `agent_answer_schema_issues({})` with `python -I` from a neutral directory. Validation loaded the packaged Schema and returned five expected issues.
 - Verification: full suite `196 passed`; Ruff check, format check, pip check, and diff check passed.
+
+## Integration verification
+
+Integrated commits: `41f2096`, `ab018ad`, `ea52145`.
+
+The combined integration initially exposed a test-isolation assumption: the packaging subprocess excluded every repository child path, including a repository-local virtual environment's runtime dependencies. The tests now explicitly preserve only their declared runtime dependency directory while continuing to exclude source modules. Integrated verification: `303 passed`; Ruff, format, pip check, and diff check passed.

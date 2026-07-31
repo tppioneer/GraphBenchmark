@@ -1,6 +1,6 @@
 # AIS-003: 保存原始响应并生成 Agent Answer
 
-State: VERIFIED
+State: INTEGRATED
 
 ## Objective
 
@@ -67,6 +67,8 @@ State: VERIFIED
 - Remediation round 2: `PASS`
 - Reviewed remediation head: `d8b81c8b140a28e10631d98f9b742c6f72683c8b`
 - Finding status: `AIS003-R1`, `AIS003-R2` resolved
+- Integrated commits: `41f2096`, `ab018ad`, `ea52145`
+- Integrated verification: `303 passed`; Ruff, format, pip check, and diff check passed
 
 ## Delivery contract
 

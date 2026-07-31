@@ -1,6 +1,6 @@
 # AIS-004: 加载 Profile 并验证 Ground Truth Rubric
 
-State: VERIFIED
+State: INTEGRATED
 
 ## Objective
 
@@ -66,6 +66,8 @@ State: VERIFIED
 - Remediation round 2: `PASS`
 - Reviewed remediation head: `4491a2a7dd5eb6f437da94f48ca00ae0e1a279ab`
 - Finding status: `AIS004-R1`, `AIS004-R2` resolved
+- Integrated commits: `81da7e8`, `c0e0e86`, `d33a06e`
+- Integrated verification: `303 passed`; Ruff, format, pip check, and diff check passed
 
 ## Delivery contract
 

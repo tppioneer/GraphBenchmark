@@ -57,3 +57,9 @@ Verdict: `PASS`
 - `AIS004-R2`: resolved. Schema and YAML Profile resources are packaged and loaded with `importlib.resources`; `jsonschema` and `PyYAML` remain runtime dependencies.
 - Independent wheel verification: built the submitted wheel, confirmed the GT Schema plus `common.yaml` and `bug-localization-v1.yaml` are present, installed it into an isolated target, then loaded `bug_localization` and validated an invalid task identity with `python -I` from a neutral directory. Resource loading succeeded and returned structured issue codes.
 - Verification: full suite `274 passed`; Ruff check, format check, pip check, and diff check passed.
+
+## Integration verification
+
+Integrated commits: `81da7e8`, `c0e0e86`, `d33a06e`.
+
+The combined integration initially exposed a test-isolation assumption: the packaging subprocess excluded every repository child path, including a repository-local virtual environment's runtime dependencies. The tests now explicitly preserve only their declared runtime dependency directory while continuing to exclude source modules. Integrated verification: `303 passed`; Ruff, format, pip check, and diff check passed.

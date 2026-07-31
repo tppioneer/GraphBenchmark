@@ -80,6 +80,7 @@ _RUNNER_SCRIPT = textwrap.dedent(
     repo = os.path.abspath(sys.argv[2])
     valid_path = sys.argv[3]
     invalid_path = sys.argv[4]
+    runtime_deps = os.path.abspath(os.environ["GRAPHBENCHMARK_RUNTIME_DEPS"])
 
     # ``-S`` skipped site.py, so the editable-install finder is absent and the
     # source checkout is not on sys.path. Belt-and-braces: drop any entry that
@@ -89,7 +90,10 @@ _RUNNER_SCRIPT = textwrap.dedent(
         for p in sys.path
         if p
         and os.path.abspath(p) != repo
-        and not os.path.abspath(p).startswith(repo + os.sep)
+        and (
+            not os.path.abspath(p).startswith(repo + os.sep)
+            or os.path.abspath(p) == runtime_deps
+        )
     ]
 
     import runner.artifact_validation as av
@@ -212,6 +216,7 @@ def test_installed_wheel_runs_agent_answer_validation(tmp_path: Path) -> None:
     # exposes only the isolated install plus jsonschema's site-packages.
     env = dict(os.environ)
     env["PYTHONPATH"] = os.pathsep.join([str(isolated), str(_jsonschema_site_packages())])
+    env["GRAPHBENCHMARK_RUNTIME_DEPS"] = str(_jsonschema_site_packages())
     env.pop("PYTHONHOME", None)
 
     result = subprocess.run(

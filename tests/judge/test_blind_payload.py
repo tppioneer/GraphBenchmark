@@ -472,3 +472,225 @@ def test_untrusted_answer_is_not_promoted_to_instruction() -> None:
     top_level_text_keys = {k for k in blind if isinstance(blind[k], str)}
     assert "explanation" not in top_level_text_keys
     assert "instruction" not in blind
+
+
+# ----------------------------- R1: type-validated reconstruction ---------- #
+# Adversarial tests (AIS007-R1): every nested allowlisted value must be
+# type-validated and reconstructed, not shallow-copied. A value of the wrong
+# type (e.g. a dict where a string is expected, smuggling identity fields) is
+# rejected with BlindPayloadError instead of being emitted unchanged.
+
+
+def test_limitations_rejects_non_string_elements() -> None:
+    # The R1 motivating example: limitations=[{tool_policy, agent_model}] must
+    # be rejected, not shallow-copied into the blind payload.
+    bad = copy.deepcopy(ex.FULL_AGENT_ANSWER)
+    bad["answer"]["limitations"] = [{"tool_policy": "graph", "agent_model": "secret-model"}]
+    with pytest.raises(BlindPayloadError, match="limitations"):
+        _build(agent_answer=bad)
+
+
+def test_limitations_rejects_non_list_type() -> None:
+    bad = copy.deepcopy(ex.FULL_AGENT_ANSWER)
+    bad["answer"]["limitations"] = "no tool output"
+    with pytest.raises(BlindPayloadError, match="limitations.*list"):
+        _build(agent_answer=bad)
+
+
+def test_recommended_actions_rejects_non_string_elements() -> None:
+    bad = copy.deepcopy(ex.FULL_AGENT_ANSWER)
+    bad["answer"]["recommended_actions"] = [{"action": "leak", "agent": "claude-code"}]
+    with pytest.raises(BlindPayloadError, match="recommended_actions"):
+        _build(agent_answer=bad)
+
+
+def test_recommended_actions_rejects_non_list_type() -> None:
+    bad = copy.deepcopy(ex.FULL_AGENT_ANSWER)
+    bad["answer"]["recommended_actions"] = 42
+    with pytest.raises(BlindPayloadError, match="recommended_actions.*list"):
+        _build(agent_answer=bad)
+
+
+def test_evidence_ids_rejects_non_string_elements() -> None:
+    bad = copy.deepcopy(ex.FULL_AGENT_ANSWER)
+    bad["answer"]["findings"][0]["evidence_ids"] = [
+        {"candidate_id": "answer-A-grep", "run_file": "graph.json"}
+    ]
+    with pytest.raises(BlindPayloadError, match="evidence_ids"):
+        _build(agent_answer=bad)
+
+
+def test_evidence_ids_rejects_non_list_type() -> None:
+    bad = copy.deepcopy(ex.FULL_AGENT_ANSWER)
+    bad["answer"]["findings"][0]["evidence_ids"] = "evidence-1"
+    with pytest.raises(BlindPayloadError, match="evidence_ids.*list"):
+        _build(agent_answer=bad)
+
+
+def test_findings_rejects_non_object_item() -> None:
+    bad = copy.deepcopy(ex.FULL_AGENT_ANSWER)
+    bad["answer"]["findings"] = ["not-a-finding"]
+    with pytest.raises(BlindPayloadError, match="findings\\[0\\].*object"):
+        _build(agent_answer=bad)
+
+
+def test_findings_rejects_non_list_type() -> None:
+    bad = copy.deepcopy(ex.FULL_AGENT_ANSWER)
+    bad["answer"]["findings"] = {"id": "finding-1"}
+    with pytest.raises(BlindPayloadError, match="findings.*list"):
+        _build(agent_answer=bad)
+
+
+def test_finding_rejects_non_string_id() -> None:
+    bad = copy.deepcopy(ex.FULL_AGENT_ANSWER)
+    bad["answer"]["findings"][0]["id"] = {"smuggled": "identity"}
+    with pytest.raises(BlindPayloadError, match="findings\\[0\\].*id.*string"):
+        _build(agent_answer=bad)
+
+
+def test_finding_rejects_non_string_kind() -> None:
+    bad = copy.deepcopy(ex.FULL_AGENT_ANSWER)
+    bad["answer"]["findings"][0]["kind"] = 123
+    with pytest.raises(BlindPayloadError, match="kind.*string"):
+        _build(agent_answer=bad)
+
+
+def test_finding_rejects_non_string_claim() -> None:
+    bad = copy.deepcopy(ex.FULL_AGENT_ANSWER)
+    bad["answer"]["findings"][0]["claim"] = ["root", "cause"]
+    with pytest.raises(BlindPayloadError, match="claim.*string"):
+        _build(agent_answer=bad)
+
+
+def test_evidence_rejects_non_object_item() -> None:
+    bad = copy.deepcopy(ex.FULL_AGENT_ANSWER)
+    bad["evidence"] = [42]
+    with pytest.raises(BlindPayloadError, match="evidence\\[0\\].*object"):
+        _build(agent_answer=bad)
+
+
+def test_evidence_rejects_non_list_type() -> None:
+    bad = copy.deepcopy(ex.FULL_AGENT_ANSWER)
+    bad["evidence"] = "evidence-1"
+    with pytest.raises(BlindPayloadError, match="evidence.*list"):
+        _build(agent_answer=bad)
+
+
+def test_evidence_entry_rejects_non_string_id() -> None:
+    bad = copy.deepcopy(ex.FULL_AGENT_ANSWER)
+    bad["evidence"][0]["id"] = {"candidate": "answer-B"}
+    with pytest.raises(BlindPayloadError, match="evidence\\[0\\].*id.*string"):
+        _build(agent_answer=bad)
+
+
+def test_evidence_entry_rejects_non_string_file() -> None:
+    bad = copy.deepcopy(ex.FULL_AGENT_ANSWER)
+    bad["evidence"][0]["file"] = 100
+    with pytest.raises(BlindPayloadError, match="file.*string"):
+        _build(agent_answer=bad)
+
+
+def test_evidence_entry_rejects_non_string_reason() -> None:
+    bad = copy.deepcopy(ex.FULL_AGENT_ANSWER)
+    bad["evidence"][0]["reason"] = {"nested": "metadata"}
+    with pytest.raises(BlindPayloadError, match="reason.*string"):
+        _build(agent_answer=bad)
+
+
+def test_evidence_entry_rejects_non_integer_line() -> None:
+    bad = copy.deepcopy(ex.FULL_AGENT_ANSWER)
+    bad["evidence"][0]["line"] = "42"
+    with pytest.raises(BlindPayloadError, match="line.*integer"):
+        _build(agent_answer=bad)
+
+
+def test_evidence_entry_rejects_bool_line() -> None:
+    # bool is a subclass of int in Python but is not a valid line number.
+    bad = copy.deepcopy(ex.FULL_AGENT_ANSWER)
+    bad["evidence"][0]["line"] = True
+    with pytest.raises(BlindPayloadError, match="line.*integer"):
+        _build(agent_answer=bad)
+
+
+def test_evidence_entry_rejects_non_string_symbol() -> None:
+    bad = copy.deepcopy(ex.FULL_AGENT_ANSWER)
+    bad["evidence"][0]["symbol"] = {"tool_policy": "graph"}
+    with pytest.raises(BlindPayloadError, match="symbol.*string"):
+        _build(agent_answer=bad)
+
+
+def test_rubric_rejects_non_object_item() -> None:
+    bad_gt = copy.deepcopy(ex.FULL_GT)
+    bad_gt["rubric_items"] = ["not-an-object"]
+    with pytest.raises(BlindPayloadError, match="rubric_items\\[0\\].*object"):
+        _build(ground_truth=bad_gt)
+
+
+def test_rubric_rejects_non_string_id() -> None:
+    bad_gt = copy.deepcopy(ex.FULL_GT)
+    bad_gt["rubric_items"][0]["id"] = {"candidate_id": "answer-A"}
+    with pytest.raises(BlindPayloadError, match="rubric_items\\[0\\].*id.*string"):
+        _build(ground_truth=bad_gt)
+
+
+def test_rubric_rejects_non_string_dimension() -> None:
+    bad_gt = copy.deepcopy(ex.FULL_GT)
+    bad_gt["rubric_items"][0]["dimension"] = 35
+    with pytest.raises(BlindPayloadError, match="dimension.*string"):
+        _build(ground_truth=bad_gt)
+
+
+def test_rubric_rejects_non_number_points() -> None:
+    bad_gt = copy.deepcopy(ex.FULL_GT)
+    bad_gt["rubric_items"][0]["points"] = "35"
+    with pytest.raises(BlindPayloadError, match="points.*number"):
+        _build(ground_truth=bad_gt)
+
+
+def test_rubric_rejects_bool_points() -> None:
+    # bool is a subclass of int but is not a valid points value.
+    bad_gt = copy.deepcopy(ex.FULL_GT)
+    bad_gt["rubric_items"][0]["points"] = True
+    with pytest.raises(BlindPayloadError, match="points.*number"):
+        _build(ground_truth=bad_gt)
+
+
+def test_rubric_rejects_non_string_criterion() -> None:
+    bad_gt = copy.deepcopy(ex.FULL_GT)
+    bad_gt["rubric_items"][0]["criterion"] = {"criterion": "text"}
+    with pytest.raises(BlindPayloadError, match="criterion.*string"):
+        _build(ground_truth=bad_gt)
+
+
+def test_rubric_rejects_non_string_full_credit() -> None:
+    bad_gt = copy.deepcopy(ex.FULL_GT)
+    bad_gt["rubric_items"][0]["full_credit"] = 100
+    with pytest.raises(BlindPayloadError, match="full_credit.*string"):
+        _build(ground_truth=bad_gt)
+
+
+def test_rubric_rejects_non_bool_critical() -> None:
+    bad_gt = copy.deepcopy(ex.FULL_GT)
+    bad_gt["rubric_items"][0]["critical"] = "yes"
+    with pytest.raises(BlindPayloadError, match="critical.*boolean"):
+        _build(ground_truth=bad_gt)
+
+
+def test_rubric_smuggled_field_does_not_leak_through_valid_types() -> None:
+    # Even with correct types, a smuggled non-allowlisted field must be absent.
+    # ``references`` carries GT-author symbol/file locations and is dropped.
+    bad_gt = copy.deepcopy(ex.FULL_GT)
+    bad_gt["rubric_items"][0]["references"] = [
+        {"symbol": "_load_events", "file": "secret.py", "lines": [1, 2]}
+    ]
+    blind = _build(ground_truth=bad_gt)
+    assert "references" not in _all_keys(blind)
+    assert not _contains_anywhere(blind["rubric_items"], "secret.py")
+
+
+def test_type_validation_does_not_break_valid_full_payload() -> None:
+    # A completely valid full payload must still build and conform to the schema
+    # after the type-validation changes.
+    blind = _build()
+    errors = list(_judge_input_validator().iter_errors(blind))
+    assert not errors, [e.message for e in errors]

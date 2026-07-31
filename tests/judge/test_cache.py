@@ -372,3 +372,105 @@ def test_put_overwrite_is_idempotent_for_same_result() -> None:
     cache.put(key, copy.deepcopy(result))
     assert len(cache) == 1
     assert cache.get(key) == result
+
+
+# ----------------------------- R2: key-to-components integrity ------------- #
+# Adversarial tests (AIS007-R2): when ``key_input`` is supplied to ``put``,
+# the key must equal ``compute_cache_key(key_input)``. On read, the stored
+# ``key_components`` must hash back to the lookup key, preventing stale or
+# poisoned hits.
+
+
+def test_put_rejects_mismatched_key_for_key_input() -> None:
+    # A key that does not equal compute_cache_key(key_input) must be rejected
+    # so an entry can never be stored under an unrelated key.
+    cache = JudgeCache()
+    ki = _base_key_input()
+    wrong_key = "sha256:" + "0" * 64
+    assert wrong_key != compute_cache_key(ki)
+    with pytest.raises(ValueError, match="does not match compute_cache_key"):
+        cache.put(wrong_key, _sample_judge_result(), key_input=ki)
+    # Nothing was stored.
+    assert not cache.has(wrong_key)
+    assert len(cache) == 0
+
+
+def test_put_rejects_malformed_key_for_key_input() -> None:
+    # A malformed (non-sha256) key can never equal compute_cache_key(key_input),
+    # so it is rejected as a mismatch.
+    cache = JudgeCache()
+    ki = _base_key_input()
+    with pytest.raises(ValueError, match="does not match compute_cache_key"):
+        cache.put("not-a-digest", _sample_judge_result(), key_input=ki)
+    assert len(cache) == 0
+
+
+def test_put_accepts_matching_key_for_key_input() -> None:
+    # The correct key derived from key_input is accepted and servable.
+    cache = JudgeCache()
+    ki = _base_key_input()
+    key = compute_cache_key(ki)
+    cache.put(key, _sample_judge_result(), key_input=ki)
+    assert cache.has(key)
+    assert cache.get(key) == _sample_judge_result()
+
+
+def test_put_without_key_input_accepts_any_key() -> None:
+    # Without key_input, the key is not validated (backwards-compatible).
+    # key_components is stored as None and the key-to-components check is
+    # skipped on read.
+    cache = JudgeCache()
+    arbitrary_key = "sha256:" + "a" * 64
+    cache.put(arbitrary_key, _sample_judge_result())
+    assert cache.get(arbitrary_key) == _sample_judge_result()
+
+
+def test_get_rejects_tampered_key_components() -> None:
+    # If key_components are tampered after put, they no longer hash to the key
+    # and the entry is rejected as a stale/poisoned hit.
+    cache = JudgeCache()
+    ki = _base_key_input()
+    key = compute_cache_key(ki)
+    cache.put(key, _sample_judge_result(), key_input=ki)
+    # Tamper: change the model so the components hash to a different key.
+    cache._entries[key]["key_components"]["judge_model"] = "claude-sonnet-4"  # noqa: SLF001
+    with pytest.raises(CacheCorruptedError, match="key_components do not hash"):
+        cache.get(key)
+
+
+def test_get_rejects_key_components_hashing_to_different_key() -> None:
+    # Swap the entire key_components block with one for a different input; the
+    # stored result is intact but the key-to-components association is broken.
+    cache = JudgeCache()
+    ki_a = _base_key_input()
+    key_a = compute_cache_key(ki_a)
+    cache.put(key_a, _sample_judge_result(), key_input=ki_a)
+
+    ki_b = dataclasses.replace(_base_key_input(), judge_model="claude-sonnet-4")
+    cache._entries[key_a]["key_components"] = ki_b.key_payload()  # noqa: SLF001
+    with pytest.raises(CacheCorruptedError, match="key_components do not hash"):
+        cache.get(key_a)
+
+
+def test_get_rejects_entry_missing_key_components() -> None:
+    # Deleting key_components entirely makes the entry incomplete.
+    cache = JudgeCache()
+    key = compute_cache_key(_base_key_input())
+    cache.put(key, _sample_judge_result(), key_input=_base_key_input())
+    del cache._entries[key]["key_components"]  # noqa: SLF001
+    with pytest.raises(CacheCorruptedError, match="incomplete.*key_components"):
+        cache.get(key)
+
+
+def test_key_components_integrity_round_trip() -> None:
+    # End-to-end: put with key_input, then get verifies key_components hash to
+    # the key and serves the result.
+    cache = JudgeCache()
+    ki = _base_key_input()
+    key = compute_cache_key(ki)
+    cache.put(key, _sample_judge_result(), key_input=ki)
+    hit = cache.get(key)
+    assert hit is not None
+    assert hit == _sample_judge_result()
+    # The stored key_components match the input.
+    assert cache._entries[key]["key_components"] == ki.key_payload()  # noqa: SLF001

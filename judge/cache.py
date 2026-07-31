@@ -44,10 +44,14 @@ _DIGEST_FIELDS: tuple[str, ...] = (
 )
 
 #: Fields required in every cached entry for it to be considered complete.
+#: ``key_components`` is always present (``None`` when no ``key_input`` was
+#: supplied); requiring it ensures a tamperer cannot delete it to bypass the
+#: key-to-components integrity check in :meth:`JudgeCache._verify`.
 _REQUIRED_ENTRY_FIELDS: tuple[str, ...] = (
     "cache_protocol_version",
     "judge_result",
     "result_digest",
+    "key_components",
 )
 
 #: The digest fields read from a blind payload's ``digests`` block.
@@ -185,10 +189,20 @@ class JudgeCache:
     ) -> None:
         """Store ``judge_result`` under ``key`` as a deep-copied snapshot.
 
-        ``key_input`` is optional audit metadata recording the components that
-        produced ``key``; it is not part of the integrity check but is retained
-        for traceability.
+        When ``key_input`` is supplied, ``key`` **must** equal
+        :func:`compute_cache_key` applied to it; a malformed or mismatched key
+        is rejected so an entry can never be stored under a key unrelated to
+        its components (AIS007-R2). ``key_input`` is retained as audit metadata
+        (``key_components``) and re-verified on read to prevent stale or
+        poisoned hits.
         """
+        if key_input is not None:
+            expected_key = compute_cache_key(key_input)
+            if key != expected_key:
+                raise ValueError(
+                    f"key {key!r} does not match compute_cache_key(key_input) "
+                    f"({expected_key!r}); refusing to store under an unrelated key"
+                )
         result_copy = copy.deepcopy(judge_result)
         entry: dict[str, Any] = {
             "cache_protocol_version": CACHE_PROTOCOL_VERSION,
@@ -244,3 +258,15 @@ class JudgeCache:
                 f"cache entry {key!r} is tampered: result digest mismatch "
                 f"(stored {entry['result_digest']!r}, recomputed {expected!r})"
             )
+        # Key-to-components integrity (AIS007-R2): when ``key_components`` were
+        # recorded they must hash back to the lookup key. A mismatch means the
+        # entry was stored under a wrong key or its components were tampered;
+        # serving it would be a stale or poisoned hit.
+        key_components = entry.get("key_components")
+        if key_components is not None:
+            expected_key = digest_json(key_components)
+            if key != expected_key:
+                raise CacheCorruptedError(
+                    f"cache entry {key!r} key_components do not hash to key "
+                    f"(expected {expected_key!r}); refusing stale or poisoned hit"
+                )

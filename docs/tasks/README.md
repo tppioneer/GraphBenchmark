@@ -25,7 +25,7 @@
 | `AIS-004` | 加载 Profile 并验证 GT Rubric | INTEGRATED | AIS-002 |
 | `AIS-005` | 确定性计算 item、维度、总分和 cap | DRAFT | AIS-004 |
 | `AIS-006` | 形成多 Judge 共识和人工复核有效分 | DRAFT | AIS-005 |
-| `AIS-007` | 生成盲评输入、digest 与缓存键 | VERIFIED | AIS-002 |
+| `AIS-007` | 生成盲评输入、digest 与缓存键 | INTEGRATED | AIS-002 |
 | `AIS-008` | 集成 Claude Code CLI Judge、提示和仲裁调用 | DRAFT | AIS-006, AIS-007 |
 | `AIS-009` | 运行 Agent 并独立采集策略/成本指标 | DRAFT | AIS-003, AIS-004 |
 | `AIS-010` | 可选建立三个 Profile 的人工校准诊断 | DRAFT | AIS-006, AIS-008 |

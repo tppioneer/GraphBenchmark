@@ -44,4 +44,10 @@ Verdict: `PASS`
 - `AIS007-R1`: resolved. Every nested allowlisted Agent Answer, evidence, rubric, and excerpt value is reconstructed with contract-aware type checks; the original nested-leak counterexample is rejected.
 - `AIS007-R2`: resolved. `put` rejects a supplied key that does not match `compute_cache_key(key_input)`, and reads verify stored key components hash back to the lookup key.
 - Verification: task tests `99 passed`; full suite `266 passed`; ruff, format, pip check, and diff check passed.
+
+## Integration verification
+
+Integrated commits: `f37c0be`, `106822b`.
+
+Integrated verification: `402 passed`; Ruff, format, pip check, and diff check passed.
 - Residual note: callers may still use the backward-compatible `put(..., key_input=None)` path, which cannot verify key components. This is not part of the accepted finding but production callers should always supply `key_input`.

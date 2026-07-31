@@ -1,6 +1,6 @@
 # AIS-007: 生成盲评输入、digest 与缓存键
 
-State: VERIFIED
+State: INTEGRATED
 
 ## Objective
 
@@ -64,6 +64,8 @@ State: VERIFIED
 - Remediation round 1: `VERIFIED`
 - Remediation head: `a392086da365586ce121422ec5ff1fd86b36d28f`
 - Independent verdict: `PASS`; `AIS007-R1`, `AIS007-R2` resolved
+- Integrated commits: `f37c0be`, `106822b`
+- Integrated verification: `402 passed`; Ruff, format, pip check, and diff check passed
 
 ## Delivery contract
 

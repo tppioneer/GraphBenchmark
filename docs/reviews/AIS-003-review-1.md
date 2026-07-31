@@ -34,3 +34,15 @@ Verdict: `CHANGES_REQUIRED`
 Base remediation on `e01a9e3b46df43336c4ffe0e8e327456c02efbbd`.
 
 Resolve: `AIS003-R1`, `AIS003-R2`. The controller authorizes the minimum required `pyproject.toml` dependency edit for `AIS003-R2`; avoid unrelated packaging changes.
+
+## Remediation round 1 review
+
+Reviewed range: `e01a9e3b46df43336c4ffe0e8e327456c02efbbd..e9b2795bc12c2c06576741dc3f476513cb0f7b60`
+
+Verdict: `CHANGES_REQUIRED`
+
+- `AIS003-R1`: resolved. The original case/task mismatch counterexample now produces `completed_with_schema_warning`, records both mismatched fields, and writes Runner-authoritative identity.
+- `AIS003-R2`: remains open. `jsonschema` is now a runtime dependency, but a normal wheel contains `runner/artifact_validation.py` without `schemas/agent-answer.schema.json`. Installing that wheel and calling validation raises `FileNotFoundError`. The new dependency test runs only from the source checkout and does not test an installed wheel. It also asserts that `PyYAML` remains dev-only, which conflicts with AIS-004 production Profile loading.
+- Verification: task tests `28 passed`; full suite `195 passed`; ruff, format, pip check, and diff check passed.
+
+Next remediation must package runtime Schema/Profile resources and load them through an installed-package-safe mechanism. Remove the unrelated `PyYAML` dev-only assertion from AIS-003 tests; runtime ownership of `PyYAML` belongs to AIS-004.

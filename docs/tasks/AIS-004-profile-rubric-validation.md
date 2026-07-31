@@ -1,6 +1,6 @@
 # AIS-004: 加载 Profile 并验证 Ground Truth Rubric
 
-State: IMPLEMENTING
+State: CHANGES_REQUIRED
 
 ## Objective
 
@@ -60,7 +60,9 @@ State: IMPLEMENTING
 - Reviewed head: `0ecb9212f56bf5df362924076ffb28fafd4fd238`
 - Verdict: `CHANGES_REQUIRED`
 - Open findings: `AIS004-R1`, `AIS004-R2`
-- Remediation round 1: `QUEUED` after AIS-003 dependency edit
+- Remediation round 1: `CHANGES_REQUIRED`
+- Remediation head: `763d3c1df818dce5dc8783b79258932c01cd84d0`
+- Finding status: `AIS004-R1`, `AIS004-R2` remain open
 
 ## Delivery contract
 

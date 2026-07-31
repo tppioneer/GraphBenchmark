@@ -34,3 +34,15 @@ Verdict: `CHANGES_REQUIRED`
 Base remediation on `0ecb9212f56bf5df362924076ffb28fafd4fd238`.
 
 Resolve: `AIS004-R1`, `AIS004-R2`. The controller authorizes the minimum required `pyproject.toml` dependency edit, but shared dependency changes must not be duplicated across parallel branches without integration coordination.
+
+## Remediation round 1 review
+
+Reviewed range: `0ecb9212f56bf5df362924076ffb28fafd4fd238..763d3c1df818dce5dc8783b79258932c01cd84d0`
+
+Verdict: `CHANGES_REQUIRED`
+
+- `AIS004-R1`: remains open. The original missing-version/criterion/extra-field counterexample is now reported correctly. However, the production entry point loads a task Profile before returning Schema issues; an invalid `task_type` produces four Schema issues through `validate_ground_truth_schema` but `validate_profile_and_rubric` raises `ProfileError` instead of returning them. This violates the remediation requirement to convert every Schema failure and the task requirement to report all actionable validation problems together.
+- `AIS004-R2`: remains open. `jsonschema` and `PyYAML` are runtime dependencies, but the built wheel contains neither `schemas/ground-truth.schema.json` nor the YAML Profile files. Importing `scoring.rubric_validator` from the installed wheel raises `FileNotFoundError` before validation can run.
+- Verification: task tests `98 passed`; full suite `265 passed`; ruff, format, pip check, and diff check passed.
+
+Next remediation must validate Schema structure before task-dependent Profile loading, return deterministic Schema issues for invalid/missing task identity, and package/load Schema/Profile resources safely from an installed wheel.

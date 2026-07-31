@@ -34,3 +34,14 @@ Verdict: `CHANGES_REQUIRED`
 Base remediation on `a16dd50f117ac4a26659f4e5745683ceb481b22f`.
 
 Resolve: `AIS007-R1`, `AIS007-R2`. Do not broaden into Provider calls, prompt text, consensus, scoring, or persistent cache design.
+
+## Remediation round 1 review
+
+Reviewed range: `a16dd50f117ac4a26659f4e5745683ceb481b22f..a392086da365586ce121422ec5ff1fd86b36d28f`
+
+Verdict: `PASS`
+
+- `AIS007-R1`: resolved. Every nested allowlisted Agent Answer, evidence, rubric, and excerpt value is reconstructed with contract-aware type checks; the original nested-leak counterexample is rejected.
+- `AIS007-R2`: resolved. `put` rejects a supplied key that does not match `compute_cache_key(key_input)`, and reads verify stored key components hash back to the lookup key.
+- Verification: task tests `99 passed`; full suite `266 passed`; ruff, format, pip check, and diff check passed.
+- Residual note: callers may still use the backward-compatible `put(..., key_input=None)` path, which cannot verify key components. This is not part of the accepted finding but production callers should always supply `key_input`.

@@ -1,6 +1,6 @@
 # AIS-005: 确定性聚合 item、维度、总分和 critical cap
 
-State: IMPLEMENTING
+State: READY_FOR_REVIEW
 
 ## Objective
 
@@ -19,6 +19,12 @@ State: IMPLEMENTING
 - Branch: `codex/ais-005-deterministic-scoring`
 - Expected HEAD: `bc43a7b5c87e93fee474aacc14df0d61a5d7ed9b`
 - Return channel: commit + AGENT_RESULT
+
+## Execution result
+
+- Executor: Claude Code (`glm-5.2`)
+- Head: `f36711e2682cd36d6ca89a3a45a7fef8da36f0c5`
+- Reported checks: task tests `62 passed`; full suite `464 passed`; Ruff and diff check passed
 
 ## Invariants
 

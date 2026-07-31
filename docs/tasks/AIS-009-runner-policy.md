@@ -1,6 +1,6 @@
 # AIS-009: 运行 Agent 并独立采集策略与成本指标
 
-State: IMPLEMENTING
+State: READY_FOR_REVIEW
 
 ## Objective
 
@@ -19,6 +19,12 @@ Runner 以固定实验条件执行被测 Agent，生成完整 run artifact，并
 - Branch: `codex/ais-009-runner-policy`
 - Expected HEAD: `bc43a7b5c87e93fee474aacc14df0d61a5d7ed9b`
 - Return channel: commit + AGENT_RESULT
+
+## Execution result
+
+- Executor: Claude Code (`glm-5.2`)
+- Head: `55ff91a6dd310fe9f2f6890d018e05151d7c1439`
+- Reported checks: task tests `40 passed`; full suite `442 passed`; Ruff and diff check passed
 
 ## Invariants
 

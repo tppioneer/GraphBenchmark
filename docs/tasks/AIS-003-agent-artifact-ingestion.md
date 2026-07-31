@@ -1,6 +1,6 @@
 # AIS-003: 保存原始响应并生成 Agent Answer
 
-State: CHANGES_REQUIRED
+State: IMPLEMENTING
 
 ## Objective
 
@@ -61,6 +61,7 @@ State: CHANGES_REQUIRED
 - Reviewed head: `e01a9e3b46df43336c4ffe0e8e327456c02efbbd`
 - Verdict: `CHANGES_REQUIRED`
 - Open findings: `AIS003-R1`, `AIS003-R2`
+- Remediation round 1: `IMPLEMENTING`
 
 ## Delivery contract
 

@@ -1,6 +1,6 @@
 # AIS-007: 生成盲评输入、digest 与缓存键
 
-State: CHANGES_REQUIRED
+State: IMPLEMENTING
 
 ## Objective
 
@@ -61,6 +61,7 @@ State: CHANGES_REQUIRED
 - Reviewed head: `a16dd50f117ac4a26659f4e5745683ceb481b22f`
 - Verdict: `CHANGES_REQUIRED`
 - Open findings: `AIS007-R1`, `AIS007-R2`
+- Remediation round 1: `IMPLEMENTING`
 
 ## Delivery contract
 

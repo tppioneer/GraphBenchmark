@@ -16,25 +16,32 @@ from __future__ import annotations
 
 import json
 from dataclasses import dataclass
-from pathlib import Path
+from importlib.resources import files
 from typing import Any
 
 from jsonschema import Draft202012Validator
 
-# runner/artifact_validation.py -> runner/ -> repo root.
-REPO_ROOT = Path(__file__).resolve().parent.parent
-SCHEMA_DIR = REPO_ROOT / "schemas"
-
 _VALIDATOR: Draft202012Validator | None = None
+
+
+def _load_agent_answer_schema() -> dict[str, Any]:
+    """Load the agent-answer JSON Schema from the installed ``schemas`` package.
+
+    The schema ships as package data inside the wheel and is located through
+    ``importlib.resources`` so the production validator works from an installed
+    package without falling back to the source checkout (AIS-003 R2). The
+    top-level ``schemas/agent-answer.schema.json`` remains the source of truth;
+    this loader changes resource location only, never Schema semantics.
+    """
+    resource = files("schemas").joinpath("agent-answer.schema.json")
+    return json.loads(resource.read_text(encoding="utf-8"))
 
 
 def _validator() -> Draft202012Validator:
     """Return a cached Draft 2020-12 validator for the agent-answer schema."""
     global _VALIDATOR
     if _VALIDATOR is None:
-        with (SCHEMA_DIR / "agent-answer.schema.json").open(encoding="utf-8") as fh:
-            schema = json.load(fh)
-        _VALIDATOR = Draft202012Validator(schema)
+        _VALIDATOR = Draft202012Validator(_load_agent_answer_schema())
     return _VALIDATOR
 
 

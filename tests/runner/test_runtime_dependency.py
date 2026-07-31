@@ -2,8 +2,11 @@
 
 ``runner.artifact_validation`` imports ``jsonschema`` in production code, so it
 must be declared in ``[project].dependencies`` (installed by default) rather
-than only in the ``dev`` optional-dependency extra. pytest, ruff and PyYAML are
-genuinely test-only and remain in the dev extra.
+than only in the ``dev`` optional-dependency extra. pytest and ruff are
+genuinely test-only and remain in the dev extra. PyYAML is intentionally not
+asserted here: AIS-004 loads Profile YAML in production, so PyYAML may be
+promoted to a runtime dependency by that task, and AIS-003 tests must not
+contradict AIS-004's production use of PyYAML.
 """
 
 from __future__ import annotations
@@ -35,7 +38,7 @@ def test_jsonschema_is_runtime_dependency() -> None:
 
 
 def test_test_only_tools_remain_in_dev_extra() -> None:
-    """pytest, ruff and PyYAML stay in the dev extra (AIS-003 R2)."""
+    """pytest and ruff stay in the dev extra (AIS-003 R2)."""
     dev = _project().get("optional-dependencies", {}).get("dev", [])
     names = {_dep_name(d) for d in dev}
-    assert {"pytest", "ruff", "pyyaml"} <= names
+    assert {"pytest", "ruff"} <= names

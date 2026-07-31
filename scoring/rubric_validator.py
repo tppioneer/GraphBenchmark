@@ -41,6 +41,7 @@ import re
 from collections import Counter
 from dataclasses import dataclass
 from decimal import Decimal
+from importlib.resources import files
 from pathlib import Path
 from typing import Any
 
@@ -49,7 +50,6 @@ from jsonschema import Draft202012Validator
 from scoring.profiles import (
     FROZEN_DIMENSION_NAMES,
     FROZEN_DIMENSION_WEIGHTS,
-    REPO_ROOT,
     SCORING_PROFILES,
     TASK_TYPES,
     dimension_weights,
@@ -132,14 +132,21 @@ LEAK_FIELD_NAMES: frozenset[str] = frozenset(
 # Ground Truth JSON Schema (Draft 2020-12) - structural validation (AIS-004 R1).
 # ---------------------------------------------------------------------------
 
-#: Shipped Ground Truth schema (defined by AIS-002). Loaded once at import and
-#: compiled into a validator so the production entry point can enforce the
-#: schema's required fields, ``additionalProperties: false``, enums and number
-#: bounds before any Judge call - a structurally invalid GT can no longer pass
-#: with zero issues.
-_GROUND_TRUTH_SCHEMA_PATH = REPO_ROOT / "schemas" / "ground-truth.schema.json"
-with _GROUND_TRUTH_SCHEMA_PATH.open(encoding="utf-8") as _schema_fh:
-    _GROUND_TRUTH_VALIDATOR = Draft202012Validator(json.load(_schema_fh))
+
+#: Shipped Ground Truth schema (defined by AIS-002). Compiled once at import
+#: into a validator so the production entry point can enforce the schema's
+#: required fields, ``additionalProperties: false``, enums and number bounds
+#: before any Judge call - a structurally invalid GT can no longer pass with
+#: zero issues. The schema ships as ``schemas`` package data and is located
+#: through ``importlib.resources`` so the validator works from an installed
+#: wheel without the source checkout (AIS-004 R2); the top-level
+#: ``schemas/ground-truth.schema.json`` remains the source of truth.
+def _load_ground_truth_schema() -> dict[str, Any]:
+    resource = files("schemas").joinpath("ground-truth.schema.json")
+    return json.loads(resource.read_text(encoding="utf-8"))
+
+
+_GROUND_TRUTH_VALIDATOR = Draft202012Validator(_load_ground_truth_schema())
 
 #: Extracts the missing property name from a ``required`` error message
 #: (``'<name>' is a required property``) so the pointer targets the field.
@@ -324,8 +331,8 @@ def _validate_reference(
 
 def validate_rubric(
     ground_truth: dict[str, Any],
-    task_profile: dict[str, Any],
-    common_profile: dict[str, Any],
+    task_profile: dict[str, Any] | None,
+    common_profile: dict[str, Any] | None,
 ) -> list[RubricIssue]:
     """Validate a GT rubric against a task and common profile.
 
@@ -335,10 +342,15 @@ def validate_rubric(
     (acceptance criterion 5). All actionable problems are reported in a single
     pass rather than failing on the first one (acceptance criterion 4).
 
-    The caller is expected to have validated the profiles first via
-    :func:`scoring.profiles.load_validated_task_profile`; this function cross-
-    checks the GT's ``task_type`` / ``scoring_profile`` against the task profile
-    (rule 1) and reads dimension weights from the common profile (rule 5).
+    When the caller has a validated Profile it is passed in and the GT's
+    ``task_type`` / ``scoring_profile`` are cross-checked against it (rule 1)
+    while dimension weights are read from the common profile (rule 5). When the
+    task identity is missing or unknown the Profile cannot be loaded; in that
+    case both profiles may be ``None`` and the task-dependent cross-checks are
+    skipped while every rule that can be evaluated from the frozen constants
+    (dimension set, points, sums, critical zero-credit, references, leaks) still
+    runs (AIS-004 R1). Dimension weights fall back to the frozen set, which is
+    identical to a valid common profile.
     """
     issues: list[RubricIssue] = []
 
@@ -370,7 +382,7 @@ def validate_rubric(
                 pointer="/task_type",
             )
         )
-    elif task_profile.get("task_type") != gt_task_type:
+    elif task_profile is not None and task_profile.get("task_type") != gt_task_type:
         issues.append(
             RubricIssue(
                 code=GT_TASK_TYPE_INVALID,
@@ -391,7 +403,7 @@ def validate_rubric(
                 pointer="/scoring_profile",
             )
         )
-    elif task_profile.get("scoring_profile") != gt_profile:
+    elif task_profile is not None and task_profile.get("scoring_profile") != gt_profile:
         issues.append(
             RubricIssue(
                 code=GT_SCORING_PROFILE_INVALID,
@@ -559,8 +571,8 @@ def validate_rubric(
 
 def validate_rubric_or_raise(
     ground_truth: dict[str, Any],
-    task_profile: dict[str, Any],
-    common_profile: dict[str, Any],
+    task_profile: dict[str, Any] | None,
+    common_profile: dict[str, Any] | None,
 ) -> None:
     """Validate a GT rubric, raising :class:`RubricValidationError` on any issue."""
     issues = validate_rubric(ground_truth, task_profile, common_profile)
@@ -619,18 +631,41 @@ def validate_profile_and_rubric(
     """Load and validate the Profile, then validate the GT rubric against it.
 
     This is the top-level entry point meant to run before any Judge call
-    (design §7.2). The Profile is loaded from ``profile_dir`` (default
-    ``profiles/``) and fully validated via
-    :func:`scoring.profiles.load_validated_task_profile`; if it is invalid a
-    :class:`scoring.profiles.ProfileError` is raised. The GT document is then
-    validated against the Draft 2020-12 ``ground-truth.schema.json`` (AIS-004 R1)
-    together with the §7.2 business rules, and every actionable problem is
-    returned in one deterministically ordered list (empty means valid).
+    (design §7.2). The GT document is first validated against the Draft 2020-12
+    ``ground-truth.schema.json`` (AIS-004 R1) so structural failures are
+    detected before any task-dependent Profile lookup. The Profile is then
+    loaded from ``profile_dir`` (default the installed ``profiles`` package via
+    ``importlib.resources``) and fully validated via
+    :func:`scoring.profiles.load_validated_task_profile`; if the declared task
+    type is known but the shipped Profile is corrupted a
+    :class:`scoring.profiles.ProfileError` is raised (an infrastructure error
+    independent of the GT document). If the task identity is missing or unknown
+    the Profile cannot be loaded: rather than hiding the Schema/business issues
+    behind a ``ProfileError``, every rule that can be evaluated safely from the
+    frozen constants is still run and returned in one deterministically ordered
+    list (AIS-004 R1, acceptance criterion 4). An empty list means valid.
     """
-    if task_type is None:
-        task_type = ground_truth.get("task_type")
-    task_profile, common_profile = load_validated_task_profile(task_type, profile_dir)
+    # Structural Schema validation runs FIRST, before any task-dependent
+    # Profile lookup, so a structurally invalid or missing task identity
+    # returns the deterministic Schema/business issues instead of hiding them
+    # behind a ProfileError (AIS-004 R1).
     issues = validate_ground_truth_schema(ground_truth)
+
+    if task_type is None:
+        task_type = ground_truth.get("task_type") if isinstance(ground_truth, dict) else None
+
+    task_profile: dict[str, Any] | None = None
+    common_profile: dict[str, Any] | None = None
+    if task_type in TASK_TYPES:
+        # Known task type: load and validate the Profile. A corrupted shipped
+        # Profile is an infrastructure error (not a GT document problem) and
+        # still raises ProfileError here.
+        task_profile, common_profile = load_validated_task_profile(task_type, profile_dir)
+    # Unknown/missing task_type: the Profile cannot be loaded, so the task-
+    # dependent cross-checks are skipped. The §7.2 business rules that can be
+    # evaluated from the frozen constants (dimension set, points, sums, leaks,
+    # ...) still run and are returned alongside the Schema issues.
+
     issues.extend(validate_rubric(ground_truth, task_profile, common_profile))
     issues.sort(key=lambda x: (x.pointer, x.code, x.item_id or "", x.message))
     return issues

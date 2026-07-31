@@ -19,12 +19,16 @@ Profile may not be mixed (design §20).
 
 from __future__ import annotations
 
+from importlib.resources import files
 from pathlib import Path
 from typing import Any
 
 import yaml
 
-# Repository root is two levels up from this module: scoring/profiles.py.
+# Repository root is two levels up from this module: scoring/profiles.py. Kept
+# for tests that copy shipped profiles into a temp directory; production loading
+# uses ``importlib.resources`` (AIS-004 R2) so it works from an installed wheel
+# without the source checkout.
 REPO_ROOT = Path(__file__).resolve().parent.parent
 PROFILE_DIR = REPO_ROOT / "profiles"
 
@@ -94,10 +98,19 @@ class ProfileError(Exception):
 
 
 def load_profile(name: str, profile_dir: Path | None = None) -> dict[str, Any]:
-    """Load a profile YAML by its stem name (e.g. ``common`` or ``flow-tracing-v1``)."""
-    base = profile_dir if profile_dir is not None else PROFILE_DIR
-    with (base / f"{name}.yaml").open(encoding="utf-8") as fh:
-        data = yaml.safe_load(fh)
+    """Load a profile YAML by its stem name (e.g. ``common`` or ``flow-tracing-v1``).
+
+    By default the profile is loaded through ``importlib.resources`` from the
+    installed ``profiles`` package so production works from a wheel without the
+    source checkout (AIS-004 R2). The optional ``profile_dir`` overrides the
+    resource location (used by tests with a temp directory).
+    """
+    if profile_dir is not None:
+        with (profile_dir / f"{name}.yaml").open(encoding="utf-8") as fh:
+            data = yaml.safe_load(fh)
+    else:
+        resource = files("profiles").joinpath(f"{name}.yaml")
+        data = yaml.safe_load(resource.read_text(encoding="utf-8"))
     if not isinstance(data, dict):
         raise ProfileError(f"profile {name!r} must be a YAML mapping", "")
     return data

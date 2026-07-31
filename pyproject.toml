@@ -24,15 +24,15 @@ dev = [
 ]
 
 [tool.setuptools]
-# ``schemas`` is a package so its ``*.schema.json`` resources ship inside the
-# wheel and are locatable at runtime via ``importlib.resources`` (AIS-003 R2).
-packages = ["runner", "judge", "scoring", "report", "schemas"]
+# ``schemas`` and ``profiles`` are packages so their runtime resources
+# (``*.schema.json`` and ``*.yaml``) ship inside the wheel and are locatable
+# at runtime via ``importlib.resources``. The top-level files remain the source
+# of truth; declaring them as package data only changes runtime location.
+packages = ["runner", "judge", "scoring", "report", "schemas", "profiles"]
 
 [tool.setuptools.package-data]
-# The top-level ``schemas/*.schema.json`` files are the source of truth
-# (AIS-002); declaring them as package data only changes where they are
-# loaded from at runtime, never their semantics.
 schemas = ["*.schema.json"]
+profiles = ["*.yaml"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

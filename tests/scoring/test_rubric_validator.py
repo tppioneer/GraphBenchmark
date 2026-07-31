@@ -525,6 +525,122 @@ def test_schema_and_business_issues_reported_together() -> None:
     assert all(i.pointer for i in issues)
 
 
+# ----------------------------- R1: schema before profile lookup ------------ #
+# AIS-004 R1: validate_profile_and_rubric must run structural Schema validation
+# BEFORE any task-dependent Profile lookup. An invalid or missing task_type can
+# no longer hide structural Schema/business failures behind a ProfileError: the
+# deterministic issues are returned so every actionable problem is reported at
+# once. Only a known task_type whose shipped Profile is corrupted still raises
+# ProfileError (an infrastructure error independent of the GT document).
+
+
+def test_r1_invalid_task_type_with_structural_failures_returns_issues() -> None:
+    """An invalid task_type combined with other structural failures returns
+    every Schema/business issue instead of raising ProfileError."""
+    bad = _gt()
+    bad["task_type"] = "not_a_task"  # invalid task identity (schema enum + rule 1)
+    del bad["schema_version"]  # structural: missing required field
+    bad["unexpected_field"] = "boom"  # structural: additionalProperties
+
+    issues = validate_profile_and_rubric(bad)  # must NOT raise ProfileError
+    codes = set(_codes(issues))
+    assert GT_SCHEMA_INVALID in codes
+    assert GT_TASK_TYPE_INVALID in codes
+    # Every issue carries a non-empty, actionable pointer.
+    assert all(i.pointer for i in issues)
+    ptrs = {i.pointer for i in issues}
+    assert "/task_type" in ptrs
+    assert "/schema_version" in ptrs
+    assert "/unexpected_field" in ptrs
+
+
+def test_r1_missing_task_type_with_structural_failures_returns_issues() -> None:
+    """A missing task_type combined with structural failures returns the
+    deterministic issues without raising ProfileError."""
+    bad = _gt()
+    del bad["task_type"]  # missing task identity
+    del bad["schema_version"]  # structural: missing required field
+    bad["unexpected_field"] = "boom"  # structural: additionalProperties
+
+    issues = validate_profile_and_rubric(bad)  # must NOT raise ProfileError
+    codes = set(_codes(issues))
+    assert GT_SCHEMA_INVALID in codes
+    assert GT_TASK_TYPE_INVALID in codes
+    assert all(i.pointer for i in issues)
+    ptrs = {i.pointer for i in issues}
+    assert "/schema_version" in ptrs
+    assert "/unexpected_field" in ptrs
+
+
+def test_r1_explicit_none_task_type_degrades_safely() -> None:
+    """An explicitly passed ``task_type=None`` degrades safely even when the GT
+    document does not declare one either; the non-Profile business rules fire."""
+    bad = _gt()
+    del bad["task_type"]
+    del bad["case_id"]  # additional business failure (rule 1)
+
+    issues = validate_profile_and_rubric(bad, task_type=None)
+    codes = set(_codes(issues))
+    assert GT_TASK_TYPE_INVALID in codes
+    assert GT_CASE_ID_MISSING in codes
+    assert all(i.pointer for i in issues)
+
+
+def test_r1_invalid_task_type_safe_business_rules_still_run() -> None:
+    """With an unknown task_type the Profile is not loaded, yet the business
+    rules that do not depend on a Profile still fire and are reported alongside
+    the Schema/task-identity issues (all-errors-at-once)."""
+    bad = _gt()
+    bad["task_type"] = "not_a_task"  # invalid -> no Profile loaded
+    bad["rubric_items"][0]["points"] = 0  # business (rule 4) + schema
+    bad["rubric_items"][1]["id"] = bad["rubric_items"][0]["id"]  # rule 2 duplicate
+    bad["agent_model"] = "glm-5.2"  # rule 9 leak (+ schema additionalProperties)
+
+    issues = validate_profile_and_rubric(bad)
+    codes = set(_codes(issues))
+    assert GT_TASK_TYPE_INVALID in codes
+    assert POINTS_NOT_POSITIVE in codes
+    assert ITEM_ID_DUPLICATE in codes
+    assert GT_LEAK_DETECTED in codes
+    # Dimension/total sums also fire because an item was zeroed.
+    assert DIMENSION_POINTS_MISMATCH in codes
+    assert TOTAL_POINTS_MISMATCH in codes
+    assert all(i.pointer for i in issues)
+
+
+def test_r1_deterministic_json_pointer_ordering() -> None:
+    """With an invalid task_type and multiple structural/business failures the
+    returned issues are deterministically ordered by JSON Pointer (then code,
+    item_id, message) and stable across repeated calls (acceptance criterion 5)."""
+    bad = _gt()
+    bad["task_type"] = "not_a_task"
+    del bad["schema_version"]
+    bad["unexpected_field"] = "boom"
+    bad["rubric_items"][0]["points"] = 0  # schema (exclusiveMinimum) + business
+    bad["agent_model"] = "glm-5.2"  # business leak + schema additionalProperties
+
+    first = validate_profile_and_rubric(bad)
+    second = validate_profile_and_rubric(bad)
+    assert first == second  # exact list equality incl. order
+    expected = sorted(first, key=lambda i: (i.pointer, i.code, i.item_id or "", i.message))
+    assert first == expected
+    assert all(i.pointer for i in first)
+
+
+def test_r1_known_task_type_corrupted_profile_still_raises(tmp_path) -> None:
+    """A known task_type whose shipped Profile is corrupted is an infrastructure
+    error independent of the GT document: ProfileError is still raised. R1 only
+    degrades for missing/unknown task identity, never for a corrupted Profile."""
+    import yaml as _yaml
+
+    common = prof.load_common_profile()
+    common["judge_protocol"] = "pairwise_v1"  # corrupt the common profile
+    (tmp_path / "common.yaml").write_text(_yaml.safe_dump(common), encoding="utf-8")
+
+    with pytest.raises(prof.ProfileError):
+        validate_profile_and_rubric(_gt(), task_type="bug_localization", profile_dir=tmp_path)
+
+
 # ----------------------------- report all at once -------------------------- #
 
 

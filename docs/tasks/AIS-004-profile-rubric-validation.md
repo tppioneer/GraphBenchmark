@@ -1,6 +1,6 @@
 # AIS-004: 加载 Profile 并验证 Ground Truth Rubric
 
-State: READY_FOR_REVIEW
+State: CHANGES_REQUIRED
 
 ## Objective
 
@@ -53,6 +53,13 @@ State: READY_FOR_REVIEW
 - `.\.venv\Scripts\python.exe -m pytest tests/scoring/test_profiles.py tests/scoring/test_rubric_validator.py -q`
 - `.\.venv\Scripts\python.exe -m pytest tests -q`
 - `git diff --check`
+
+## Review evidence
+
+- Review: `docs/reviews/AIS-004-review-1.md`
+- Reviewed head: `0ecb9212f56bf5df362924076ffb28fafd4fd238`
+- Verdict: `CHANGES_REQUIRED`
+- Open findings: `AIS004-R1`, `AIS004-R2`
 
 ## Delivery contract
 

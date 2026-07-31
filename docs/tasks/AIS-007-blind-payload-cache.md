@@ -1,6 +1,6 @@
 # AIS-007: 生成盲评输入、digest 与缓存键
 
-State: READY_FOR_REVIEW
+State: CHANGES_REQUIRED
 
 ## Objective
 
@@ -54,6 +54,13 @@ State: READY_FOR_REVIEW
 - `.\.venv\Scripts\python.exe -m pytest tests/judge/test_blind_payload.py tests/judge/test_cache.py -q`
 - `.\.venv\Scripts\python.exe -m pytest tests -q`
 - `git diff --check`
+
+## Review evidence
+
+- Review: `docs/reviews/AIS-007-review-1.md`
+- Reviewed head: `a16dd50f117ac4a26659f4e5745683ceb481b22f`
+- Verdict: `CHANGES_REQUIRED`
+- Open findings: `AIS007-R1`, `AIS007-R2`
 
 ## Delivery contract
 

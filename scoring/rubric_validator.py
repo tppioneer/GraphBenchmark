@@ -28,22 +28,28 @@ The nine §7.2 rules and their error codes:
    - GT_LEAK_DETECTED
 
 Structural validation (additionalProperties, required fields, number bounds) is
-performed by the JSON Schemas (AIS-002); this module performs the business
-validation that schemas cannot express (cross-field sums, cross-document
-identity, leak-field defence-in-depth).
+defined by the JSON Schemas (AIS-002) and enforced from the production entry
+point :func:`validate_profile_and_rubric` via Draft 2020-12 schema validation
+(AIS-004 R1); the business rules below cover what schemas cannot express
+(cross-field sums, cross-document identity, leak-field defence-in-depth).
 """
 
 from __future__ import annotations
 
+import json
+import re
 from collections import Counter
 from dataclasses import dataclass
 from decimal import Decimal
 from pathlib import Path
 from typing import Any
 
+from jsonschema import Draft202012Validator
+
 from scoring.profiles import (
     FROZEN_DIMENSION_NAMES,
     FROZEN_DIMENSION_WEIGHTS,
+    REPO_ROOT,
     SCORING_PROFILES,
     TASK_TYPES,
     dimension_weights,
@@ -67,8 +73,13 @@ CRITICAL_ZERO_CREDIT_MISSING = "CRITICAL_ZERO_CREDIT_MISSING"
 REFERENCE_INVALID = "REFERENCE_INVALID"
 GT_LEAK_DETECTED = "GT_LEAK_DETECTED"
 RUBRIC_ITEMS_MISSING = "RUBRIC_ITEMS_MISSING"
+#: A GT document violated the shipped Draft 2020-12 ``ground-truth.schema.json``
+#: (AIS-004 R1). Every schema failure becomes a :class:`RubricIssue` whose
+#: ``pointer`` is an RFC 6901 JSON Pointer into the GT document.
+GT_SCHEMA_INVALID = "GT_SCHEMA_INVALID"
 
-#: All rubric error codes, in §7.2 rule order.
+#: All rubric error codes, in §7.2 rule order, followed by the structural /
+#: aggregate codes (``RUBRIC_ITEMS_MISSING``, ``GT_SCHEMA_INVALID``).
 ERROR_CODES: tuple[str, ...] = (
     GT_CASE_ID_MISSING,
     GT_TASK_TYPE_INVALID,
@@ -83,6 +94,7 @@ ERROR_CODES: tuple[str, ...] = (
     REFERENCE_INVALID,
     GT_LEAK_DETECTED,
     RUBRIC_ITEMS_MISSING,
+    GT_SCHEMA_INVALID,
 )
 
 #: Field names that must never appear in a GT document. Their presence leaks the
@@ -115,6 +127,26 @@ LEAK_FIELD_NAMES: frozenset[str] = frozenset(
         "credentials_present",
     }
 )
+
+# ---------------------------------------------------------------------------
+# Ground Truth JSON Schema (Draft 2020-12) - structural validation (AIS-004 R1).
+# ---------------------------------------------------------------------------
+
+#: Shipped Ground Truth schema (defined by AIS-002). Loaded once at import and
+#: compiled into a validator so the production entry point can enforce the
+#: schema's required fields, ``additionalProperties: false``, enums and number
+#: bounds before any Judge call - a structurally invalid GT can no longer pass
+#: with zero issues.
+_GROUND_TRUTH_SCHEMA_PATH = REPO_ROOT / "schemas" / "ground-truth.schema.json"
+with _GROUND_TRUTH_SCHEMA_PATH.open(encoding="utf-8") as _schema_fh:
+    _GROUND_TRUTH_VALIDATOR = Draft202012Validator(json.load(_schema_fh))
+
+#: Extracts the missing property name from a ``required`` error message
+#: (``'<name>' is a required property``) so the pointer targets the field.
+_REQUIRED_PROP_RE = re.compile(r"^'(.*)' is a required property$")
+#: Extracts unexpected property names from an ``additionalProperties`` error
+#: message so each extra field gets its own locatable pointer.
+_QUOTED_PROP_RE = re.compile(r"'([^']*)'")
 
 
 @dataclass(frozen=True)
@@ -152,6 +184,29 @@ class RubricValidationError(Exception):
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
+
+def _escape_json_pointer_segment(segment: str) -> str:
+    """Escape one RFC 6901 JSON Pointer segment (``~`` then ``/``)."""
+    return segment.replace("~", "~0").replace("/", "~1")
+
+
+def _json_pointer(path: Any) -> str:
+    """Build an RFC 6901 JSON Pointer from a jsonschema ``absolute_path``.
+
+    ``path`` is the deque of segments jsonschema carries on each
+    :class:`ValidationError` (strings for object keys, ints for array indices).
+    An empty path yields ``""`` (the document root).
+    """
+    if not path:
+        return ""
+    parts: list[str] = []
+    for segment in path:
+        if isinstance(segment, int) and not isinstance(segment, bool):
+            parts.append(str(segment))
+        else:
+            parts.append(_escape_json_pointer_segment(str(segment)))
+    return "/" + "/".join(parts)
 
 
 def _to_decimal(value: Any) -> Decimal | None:
@@ -513,6 +568,49 @@ def validate_rubric_or_raise(
         raise RubricValidationError(issues)
 
 
+def validate_ground_truth_schema(ground_truth: Any) -> list[RubricIssue]:
+    """Validate a GT document against the shipped Draft 2020-12 JSON Schema.
+
+    Returns a :class:`RubricIssue` (code ``GT_SCHEMA_INVALID``) for every schema
+    failure, each carrying an RFC 6901 JSON Pointer into the GT document. The
+    schema enforces structural invariants (required fields,
+    ``additionalProperties: false``, enums, number bounds) that the business
+    rules in :func:`validate_rubric` cannot express (AIS-004 R1).
+
+    ``required`` and ``additionalProperties`` failures - whose jsonschema path
+    stops at the containing object - are extended with the offending property
+    name so the pointer lands on the missing/extra field itself. The list is
+    sorted deterministically (see :func:`validate_rubric`).
+    """
+    issues: list[RubricIssue] = []
+    for err in _GROUND_TRUTH_VALIDATOR.iter_errors(ground_truth):
+        base = _json_pointer(err.absolute_path)
+        if err.validator == "required":
+            match = _REQUIRED_PROP_RE.match(err.message)
+            prop = match.group(1) if match is not None else ""
+            pointer = f"{base}/{_escape_json_pointer_segment(prop)}" if prop else base
+            issues.append(RubricIssue(code=GT_SCHEMA_INVALID, message=err.message, pointer=pointer))
+        elif err.validator == "additionalProperties":
+            extras = _QUOTED_PROP_RE.findall(err.message)
+            if extras:
+                for extra in extras:
+                    issues.append(
+                        RubricIssue(
+                            code=GT_SCHEMA_INVALID,
+                            message=f"additional property {extra!r} is not allowed",
+                            pointer=f"{base}/{_escape_json_pointer_segment(extra)}",
+                        )
+                    )
+            else:
+                issues.append(
+                    RubricIssue(code=GT_SCHEMA_INVALID, message=err.message, pointer=base)
+                )
+        else:
+            issues.append(RubricIssue(code=GT_SCHEMA_INVALID, message=err.message, pointer=base))
+    issues.sort(key=lambda x: (x.pointer, x.code, x.item_id or "", x.message))
+    return issues
+
+
 def validate_profile_and_rubric(
     ground_truth: dict[str, Any],
     task_type: str | None = None,
@@ -524,13 +622,18 @@ def validate_profile_and_rubric(
     (design §7.2). The Profile is loaded from ``profile_dir`` (default
     ``profiles/``) and fully validated via
     :func:`scoring.profiles.load_validated_task_profile`; if it is invalid a
-    :class:`scoring.profiles.ProfileError` is raised. The GT rubric is then
-    validated and its issues returned (empty means valid).
+    :class:`scoring.profiles.ProfileError` is raised. The GT document is then
+    validated against the Draft 2020-12 ``ground-truth.schema.json`` (AIS-004 R1)
+    together with the §7.2 business rules, and every actionable problem is
+    returned in one deterministically ordered list (empty means valid).
     """
     if task_type is None:
         task_type = ground_truth.get("task_type")
     task_profile, common_profile = load_validated_task_profile(task_type, profile_dir)
-    return validate_rubric(ground_truth, task_profile, common_profile)
+    issues = validate_ground_truth_schema(ground_truth)
+    issues.extend(validate_rubric(ground_truth, task_profile, common_profile))
+    issues.sort(key=lambda x: (x.pointer, x.code, x.item_id or "", x.message))
+    return issues
 
 
 def issue_counter(issues: list[RubricIssue]) -> Counter[str]:

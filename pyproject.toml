@@ -7,9 +7,12 @@ name = "graphbenchmark-ai-score"
 version = "0.1.0"
 description = "GraphBenchmark AI scoring system (semantic_outcome_v1)."
 requires-python = ">=3.12,<3.13"
-# jsonschema is imported by runner.artifact_validation at runtime (AIS-003 R2):
-# it is a production dependency, not a dev-only tool.
-dependencies = ["jsonschema>=4.20"]
+# jsonschema validates Agent Answer/GT contracts and PyYAML loads scoring
+# Profiles; both are imported by production code (AIS-003/AIS-004).
+dependencies = [
+    "jsonschema>=4.20",
+    "PyYAML>=6.0",
+]
 
 [project.scripts]
 graphbenchmark = "runner.benchmark_runner:main"
@@ -18,7 +21,6 @@ graphbenchmark = "runner.benchmark_runner:main"
 dev = [
     "pytest>=8.0",
     "ruff>=0.6",
-    "PyYAML>=6.0",
 ]
 
 [tool.setuptools]

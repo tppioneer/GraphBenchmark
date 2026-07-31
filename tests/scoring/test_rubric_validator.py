@@ -14,7 +14,9 @@
 7   critical zero-credit condition    test_rule7_critical_zero_credit_missing_rejected
 8   references satisfy schema         test_rule8_reference_*_rejected
 9   no leak field                     test_rule9_leak_*_rejected
+-   GT JSON Schema (Draft 2020-12)    test_schema_*  (AIS-004 R1 structural checks)
 -   report all problems at once       test_all_issues_reported_in_one_pass
+-   schema + business reported together test_schema_and_business_issues_reported_together
 -   deterministic / order-independent test_validation_deterministic*
 ==  ================================  ================================================
 """
@@ -35,6 +37,7 @@ from scoring.rubric_validator import (
     DIMENSION_UNKNOWN,
     GT_CASE_ID_MISSING,
     GT_LEAK_DETECTED,
+    GT_SCHEMA_INVALID,
     GT_SCORING_PROFILE_INVALID,
     GT_TASK_TYPE_INVALID,
     ITEM_ID_DUPLICATE,
@@ -46,6 +49,7 @@ from scoring.rubric_validator import (
     RubricIssue,
     RubricValidationError,
     issue_counter,
+    validate_ground_truth_schema,
     validate_profile_and_rubric,
     validate_rubric,
     validate_rubric_or_raise,
@@ -372,6 +376,153 @@ def test_ground_truth_not_a_mapping_rejected() -> None:
     issues = validate_rubric([], BUG_TASK, BUG_COMMON)  # type: ignore[arg-type]
     assert len(issues) == 1
     assert issues[0].code == RUBRIC_ITEMS_MISSING
+
+
+# ----------------------------- schema validation (AIS-004 R1) -------------- #
+# validate_profile_and_rubric must enforce ground-truth.schema.json (Draft
+# 2020-12) so a structurally invalid GT can no longer pass with zero issues.
+# Every schema failure becomes a GT_SCHEMA_INVALID RubricIssue with an RFC 6901
+# JSON Pointer. The focused tests below call validate_ground_truth_schema
+# directly to isolate the structural layer from the §7.2 business rules.
+
+
+def test_schema_valid_gt_has_no_issues() -> None:
+    assert validate_ground_truth_schema(_gt()) == []
+
+
+def test_schema_finding_scenario_caught_by_entry_point() -> None:
+    """The exact AIS-004 R1 finding: missing schema_version + missing criterion
+    + an unexpected field used to return zero issues. The entry point now
+    reports every structural failure with a locatable pointer."""
+    bad = _gt()
+    del bad["schema_version"]
+    for item in bad["rubric_items"]:
+        item.pop("criterion", None)
+    bad["unexpected_field"] = "boom"
+
+    issues = validate_profile_and_rubric(bad)
+    codes = set(_codes(issues))
+    assert GT_SCHEMA_INVALID in codes
+    # Every issue is a schema issue here (business rules pass on this input).
+    assert codes == {GT_SCHEMA_INVALID}
+    ptrs = {i.pointer for i in issues if i.code == GT_SCHEMA_INVALID}
+    assert "/schema_version" in ptrs
+    assert "/unexpected_field" in ptrs
+    assert [f"/rubric_items/{i}/criterion" for i in range(len(bad["rubric_items"]))] <= [
+        p for p in ptrs if p.endswith("/criterion")
+    ]
+    # Every issue carries a non-empty, actionable pointer.
+    assert all(i.pointer for i in issues)
+
+
+def test_schema_missing_schema_version_located() -> None:
+    bad = _gt()
+    del bad["schema_version"]
+    issues = validate_ground_truth_schema(bad)
+    assert len(issues) == 1
+    assert issues[0].code == GT_SCHEMA_INVALID
+    assert issues[0].pointer == "/schema_version"
+
+
+def test_schema_missing_criterion_located() -> None:
+    bad = _gt()
+    del bad["rubric_items"][2]["criterion"]
+    issues = validate_ground_truth_schema(bad)
+    assert len(issues) == 1
+    assert issues[0].pointer == "/rubric_items/2/criterion"
+
+
+def test_schema_unexpected_top_level_field_located() -> None:
+    bad = _gt()
+    bad["unexpected"] = "x"
+    issues = validate_ground_truth_schema(bad)
+    assert len(issues) == 1
+    assert issues[0].pointer == "/unexpected"
+
+
+def test_schema_unexpected_item_field_located() -> None:
+    bad = _gt()
+    bad["rubric_items"][1]["unexpected"] = "x"
+    issues = validate_ground_truth_schema(bad)
+    assert len(issues) == 1
+    assert issues[0].pointer == "/rubric_items/1/unexpected"
+
+
+def test_schema_multiple_unexpected_fields_each_located() -> None:
+    bad = _gt()
+    bad["foo"] = 1
+    bad["bar"] = 2
+    issues = validate_ground_truth_schema(bad)
+    ptrs = {i.pointer for i in issues}
+    assert "/foo" in ptrs
+    assert "/bar" in ptrs
+    assert all(i.code == GT_SCHEMA_INVALID for i in issues)
+
+
+def test_schema_bad_points_type_located() -> None:
+    bad = _gt()
+    bad["rubric_items"][0]["points"] = "twenty"
+    issues = validate_ground_truth_schema(bad)
+    assert len(issues) == 1
+    assert issues[0].pointer == "/rubric_items/0/points"
+
+
+def test_schema_non_positive_points_located() -> None:
+    bad = _gt()
+    bad["rubric_items"][0]["points"] = 0  # exclusiveMinimum: 0
+    issues = validate_ground_truth_schema(bad)
+    assert len(issues) == 1
+    assert issues[0].pointer == "/rubric_items/0/points"
+
+
+def test_schema_bad_dimension_enum_located() -> None:
+    bad = _gt()
+    bad["rubric_items"][0]["dimension"] = "not_a_dimension"
+    issues = validate_ground_truth_schema(bad)
+    assert len(issues) == 1
+    assert issues[0].pointer == "/rubric_items/0/dimension"
+
+
+def test_schema_bad_task_type_enum_located() -> None:
+    bad = _gt()
+    bad["task_type"] = "not_a_task"
+    issues = validate_ground_truth_schema(bad)
+    assert len(issues) == 1
+    assert issues[0].pointer == "/task_type"
+
+
+def test_schema_bad_scoring_profile_enum_located() -> None:
+    bad = _gt()
+    bad["scoring_profile"] = "flow_tracing_v2"
+    issues = validate_ground_truth_schema(bad)
+    assert len(issues) == 1
+    assert issues[0].pointer == "/scoring_profile"
+
+
+def test_schema_validation_deterministic() -> None:
+    bad = _gt()
+    del bad["schema_version"]
+    bad["foo"] = 1
+    bad["bar"] = 2
+    bad["rubric_items"][0]["points"] = "twenty"
+    first = validate_ground_truth_schema(bad)
+    second = validate_ground_truth_schema(bad)
+    assert first == second  # exact list equality incl. order
+
+
+def test_schema_and_business_issues_reported_together() -> None:
+    """All-errors-at-once: schema and business failures are reported together
+    through the production entry point (acceptance criterion 4)."""
+    bad = _gt()
+    del bad["schema_version"]  # schema (required)
+    bad["unexpected"] = "x"  # schema (additionalProperties)
+    bad["rubric_items"][0]["points"] = 0  # schema (exclusiveMinimum) + business (points)
+    issues = validate_profile_and_rubric(bad)
+    codes = set(_codes(issues))
+    assert GT_SCHEMA_INVALID in codes
+    assert POINTS_NOT_POSITIVE in codes
+    # Every issue carries a non-empty, actionable pointer.
+    assert all(i.pointer for i in issues)
 
 
 # ----------------------------- report all at once -------------------------- #

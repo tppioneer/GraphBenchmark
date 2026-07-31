@@ -1,6 +1,6 @@
 # AIS-009: 运行 Agent 并独立采集策略与成本指标
 
-State: DRAFT
+State: IMPLEMENTING
 
 ## Objective
 
@@ -15,9 +15,9 @@ Runner 以固定实验条件执行被测 Agent，生成完整 run artifact，并
 ## Execution envelope
 
 - Executor: Codex subagent or external terminal agent
-- Working directory: 派发时创建的绝对 worktree 路径
+- Working directory: `F:\\develop\\codes\\GraphBenchmark-ai-score-v1-worktrees\\ais-009-runner-policy`
 - Branch: `codex/ais-009-runner-policy`
-- Expected HEAD: 派发时填写完整 SHA
+- Expected HEAD: `bc43a7b5c87e93fee474aacc14df0d61a5d7ed9b`
 - Return channel: commit + AGENT_RESULT
 
 ## Invariants

@@ -1,6 +1,6 @@
 # AIS-005: 确定性聚合 item、维度、总分和 critical cap
 
-State: DRAFT
+State: IMPLEMENTING
 
 ## Objective
 
@@ -15,9 +15,9 @@ State: DRAFT
 ## Execution envelope
 
 - Executor: Codex subagent or external terminal agent
-- Working directory: 派发时创建的绝对 worktree 路径
+- Working directory: `F:\\develop\\codes\\GraphBenchmark-ai-score-v1-worktrees\\ais-005-deterministic-scoring`
 - Branch: `codex/ais-005-deterministic-scoring`
-- Expected HEAD: 派发时填写完整 SHA
+- Expected HEAD: `bc43a7b5c87e93fee474aacc14df0d61a5d7ed9b`
 - Return channel: commit + AGENT_RESULT
 
 ## Invariants

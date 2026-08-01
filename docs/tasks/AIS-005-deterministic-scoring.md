@@ -1,6 +1,6 @@
 # AIS-005: 确定性聚合 item、维度、总分和 critical cap
 
-State: READY_FOR_REVIEW
+State: CHANGES_REQUIRED
 
 ## Objective
 
@@ -25,6 +25,13 @@ State: READY_FOR_REVIEW
 - Executor: Claude Code (`glm-5.2`)
 - Head: `f36711e2682cd36d6ca89a3a45a7fef8da36f0c5`
 - Reported checks: task tests `62 passed`; full suite `464 passed`; Ruff and diff check passed
+
+## Review evidence
+
+- Review: `docs/reviews/AIS-005-review-1.md`
+- Reviewed head: `f36711e2682cd36d6ca89a3a45a7fef8da36f0c5`
+- Verdict: `CHANGES_REQUIRED`
+- Accepted finding: `AIS005-F1`
 
 ## Invariants
 

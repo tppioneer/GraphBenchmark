@@ -23,11 +23,11 @@
 | `AIS-002` | 定义并验证全部数据契约和 Profile | INTEGRATED | DEC-001, AIS-001 |
 | `AIS-003` | 保存原始响应并生成 Agent Answer | INTEGRATED | AIS-002 |
 | `AIS-004` | 加载 Profile 并验证 GT Rubric | INTEGRATED | AIS-002 |
-| `AIS-005` | 确定性计算 item、维度、总分和 cap | READY_FOR_REVIEW | AIS-004 |
+| `AIS-005` | 确定性计算 item、维度、总分和 cap | CHANGES_REQUIRED | AIS-004 |
 | `AIS-006` | 形成多 Judge 共识和人工复核有效分 | DRAFT | AIS-005 |
 | `AIS-007` | 生成盲评输入、digest 与缓存键 | INTEGRATED | AIS-002 |
 | `AIS-008` | 集成 Claude Code CLI Judge、提示和仲裁调用 | DRAFT | AIS-006, AIS-007 |
-| `AIS-009` | 运行 Agent 并独立采集策略/成本指标 | READY_FOR_REVIEW | AIS-003, AIS-004 |
+| `AIS-009` | 运行 Agent 并独立采集策略/成本指标 | CHANGES_REQUIRED | AIS-003, AIS-004 |
 | `AIS-010` | 可选建立三个 Profile 的人工校准诊断 | DRAFT | AIS-006, AIS-008 |
 | `AIS-011` | 生成 absolute、paired 和成本报告 | DRAFT | AIS-006, AIS-009 |
 | `AIS-012` | 端到端冻结并执行正式实验 | DRAFT | AIS-008, AIS-009, AIS-011 |

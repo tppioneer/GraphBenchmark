@@ -1,6 +1,6 @@
 # AIS-006: 形成 Judge 共识和 v1 有效分
 
-State: READY_FOR_REVIEW
+State: VERIFIED
 
 ## Objective
 
@@ -25,6 +25,8 @@ State: READY_FOR_REVIEW
 - Executor: Claude Code (`glm-5.2`)
 - Head: `44fc06e3a12b94aeed85f666dd4c203f45c710c0`
 - Reported checks: task tests `66 passed`; full suite `585 passed`; Ruff, format, and diff check passed
+- Independent review: OpenCode (`ark-plan-qlw/deepseek-v4-flash`) returned `PASS` with no findings.
+- Controller verification: task tests `66 passed`; full suite `585 passed`; Ruff and diff check passed.
 
 ## Invariants
 

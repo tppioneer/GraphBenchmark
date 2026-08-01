@@ -1,6 +1,6 @@
 # AIS-008: 集成 Claude Code CLI Judge、提示和条件仲裁
 
-State: DRAFT
+State: IMPLEMENTING
 
 ## Objective
 
@@ -14,10 +14,10 @@ State: DRAFT
 
 ## Execution envelope
 
-- Executor: Codex subagent or external terminal agent
-- Working directory: 派发时创建的绝对 worktree 路径
+- Executor: OpenCode (`ark-plan-qlw/deepseek-v4-flash`, `--auto`)
+- Working directory: `F:\\develop\\codes\\GraphBenchmark-ai-score-v1-worktrees\\ais-008-judge-integration`
 - Branch: `codex/ais-008-judge-integration`
-- Expected HEAD: 派发时填写完整 SHA
+- Expected HEAD: `5fd8cf1f93b738b2fcaca963e75d6d3b309541fd`
 - Return channel: commit + AGENT_RESULT
 
 ## Invariants

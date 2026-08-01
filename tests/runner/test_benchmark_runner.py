@@ -40,6 +40,7 @@ ANSWER = "agent-answer.json"
 METADATA = "run-metadata.json"
 POLICY = "policy-result.json"
 MANIFEST = "manifest.json"
+RUN_INPUT = "run-input.json"
 
 _RFC3339_DATE_TIME = re.compile(
     r"^\d{4}-\d{2}-\d{2}[Tt]\d{2}:\d{2}:\d{2}(\.\d+)?(Z|[+-]\d{2}:\d{2})$"
@@ -428,9 +429,10 @@ def test_failed_run_has_no_judge_placeholder_files(tmp_path: Path) -> None:
     _run(tmp_path, agent, run_id="no-placeholder")
     run_dir = tmp_path / "no-placeholder"
     names = {p.name for p in run_dir.iterdir()}
-    # Only metadata, policy and manifest are produced for a failed run.
-    assert names == {METADATA, POLICY, MANIFEST}
-    # No empty placeholder files for absent raw_response / agent_answer / judge.
+    # Only the guard's run-input record + metadata + policy + manifest are
+    # produced for a failed run (run-input.json is guard state, not a manifest
+    # artifact). No raw_response/agent_answer/judge placeholder files.
+    assert names == {RUN_INPUT, METADATA, POLICY, MANIFEST}
     assert RAW not in names
     assert ANSWER not in names
 
@@ -525,6 +527,156 @@ def test_load_run_result_reconstructs_failed_status(tmp_path: Path) -> None:
 
 
 # --------------------------------------------------------------------------- #
+# AIS009-R1: rejectable policy inputs fail before artifact writes
+# --------------------------------------------------------------------------- #
+
+
+def test_policy_validation_error_leaves_no_artifacts_and_is_truthful(tmp_path: Path) -> None:
+    """A rejectable tool-event source fails BEFORE raw-response/answer/metadata.
+
+    The agent returned an outcome with an untrusted tool-event source; the
+    Runner validates rejectable inputs before any artifact write, so the failed
+    run's terminal persistence is truthful (absent raw_response/agent_answer and
+    zero metrics reflect reality - nothing was written) and execute_run agrees
+    with load_run_result on FAILED (AIS009-R1).
+    """
+    forged = ToolEvent(kind=ToolKind.GRAPH, source="agent:self_report", label="graph")
+    agent = FakeAgent(_outcome(fx.completed_answer_bytes(), (forged,)))
+    result = _run(tmp_path, agent, run_id="r1-source")
+    assert result.status is br.RunStatus.FAILED
+    run_dir = tmp_path / "r1-source"
+    # No raw-response/agent-answer written: pre-validation failed first.
+    assert not (run_dir / RAW).exists()
+    assert not (run_dir / ANSWER).exists()
+    # Metadata metrics are zero (no execution artifacts were produced/recorded).
+    metadata = json.loads((run_dir / METADATA).read_text(encoding="utf-8"))
+    assert metadata["metrics"]["tool_call_count"] == 0
+    assert metadata["metrics"]["input_tokens"] == 0
+    # The policy-result records the cause (audit behavior preserved).
+    policy_doc = json.loads((run_dir / POLICY).read_text(encoding="utf-8"))
+    assert policy_doc["valid"] is False
+    assert [v["code"] for v in policy_doc["violations"]] == ["execution_failed"]
+    assert "policy_validation_error" in policy_doc["observations"][0]
+    # Manifest truthfully marks raw_response/agent_answer absent.
+    manifest = json.loads((run_dir / MANIFEST).read_text(encoding="utf-8"))
+    by_name = {a["name"]: a for a in manifest["artifacts"]}
+    assert by_name["raw_response"]["status"] == "absent"
+    assert by_name["agent_answer"]["status"] == "absent"
+    # execute_run and load_run_result agree on FAILED (was INVALID before R1).
+    assert br.load_run_result(runs_root=tmp_path, run_id="r1-source").status is br.RunStatus.FAILED
+
+
+def test_unknown_tool_policy_fails_before_artifact_writes(tmp_path: Path) -> None:
+    """An unknown tool_policy is rejected before artifact writes (AIS009-R1)."""
+    identity = br.RunIdentity(
+        case_id=fx.CASE_ID,
+        task_type=fx.TASK_TYPE,
+        tool_policy="bogus",
+        agent="claude-code",
+        agent_model="glm-5.2",
+    )
+    agent = FakeAgent(_outcome(fx.completed_answer_bytes(), (_event(ToolKind.GRAPH),)))
+    result = br.execute_run(
+        runs_root=tmp_path, run_id="r1-policy", identity=identity, agent=agent
+    )
+    assert result.status is br.RunStatus.FAILED
+    run_dir = tmp_path / "r1-policy"
+    assert not (run_dir / RAW).exists()
+    assert not (run_dir / ANSWER).exists()
+    # execute_run and load_run_result agree on FAILED.
+    assert br.load_run_result(runs_root=tmp_path, run_id="r1-policy").status is br.RunStatus.FAILED
+
+
+# --------------------------------------------------------------------------- #
+# AIS009-R2: immutable input identity checked for every terminal run
+# --------------------------------------------------------------------------- #
+
+
+def _identity_with(
+    *,
+    case_id: str = fx.CASE_ID,
+    task_type: str = fx.TASK_TYPE,
+    tool_policy: str = "graph",
+) -> br.RunIdentity:
+    return br.RunIdentity(
+        case_id=case_id,
+        task_type=task_type,
+        tool_policy=tool_policy,
+        agent="claude-code",
+        agent_model="glm-5.2",
+    )
+
+
+def test_run_input_records_full_identity(tmp_path: Path) -> None:
+    """run-input.json records the full immutable identity (AIS009-R2)."""
+    agent = FakeAgent(_outcome(fx.completed_answer_bytes(), (_event(ToolKind.GRAPH),)))
+    _run(tmp_path, agent, run_id="r2-input")
+    recorded = json.loads((tmp_path / "r2-input" / RUN_INPUT).read_text(encoding="utf-8"))
+    assert recorded == {
+        "schema_version": "run-input-v1",
+        "case_id": fx.CASE_ID,
+        "task_type": fx.TASK_TYPE,
+        "tool_policy": "graph",
+        "agent": "claude-code",
+        "agent_model": "glm-5.2",
+    }
+
+
+def test_failed_run_different_case_id_rejected(tmp_path: Path) -> None:
+    """A failed run's case_id is checked on reuse even with no agent-answer (R2)."""
+    _run(tmp_path, FakeAgent(raises=RuntimeError("boom")), run_id="r2-failed")
+    # Reuse the same run id with a different case_id; the run has no
+    # agent-answer, but run-input.json still lets the guard detect the conflict.
+    with pytest.raises(br.RunConflictError, match="different input"):
+        br.execute_run(
+            runs_root=tmp_path,
+            run_id="r2-failed",
+            identity=_identity_with(case_id="different-case"),
+            agent=FakeAgent(_outcome(fx.completed_answer_bytes(), (_event(ToolKind.GRAPH),))),
+        )
+
+
+def test_failed_run_different_task_type_rejected(tmp_path: Path) -> None:
+    """A failed run's task_type is checked on reuse (AIS009-R2)."""
+    _run(tmp_path, FakeAgent(raises=RuntimeError("boom")), run_id="r2-task")
+    with pytest.raises(br.RunConflictError, match="different input"):
+        br.execute_run(
+            runs_root=tmp_path,
+            run_id="r2-task",
+            identity=_identity_with(task_type="impact_analysis"),
+            agent=FakeAgent(_outcome(fx.completed_answer_bytes(), (_event(ToolKind.GRAPH),))),
+        )
+
+
+def test_failed_run_same_input_is_idempotent(tmp_path: Path) -> None:
+    """A failed run reused with the identical input is returned idempotently (R2)."""
+    agent = FakeAgent(raises=RuntimeError("boom"))
+    first = _run(tmp_path, agent, run_id="r2-idem")
+    assert first.status is br.RunStatus.FAILED
+    assert agent.call_count == 1
+    second = _run(tmp_path, agent, run_id="r2-idem")
+    assert second.status is br.RunStatus.FAILED
+    # The agent was not re-executed (idempotent, not a stale re-run).
+    assert agent.call_count == 1
+
+
+def test_complete_run_different_case_id_rejected(tmp_path: Path) -> None:
+    """A complete run reused with a different case_id is rejected via the sidecar (R2)."""
+    _run(
+        tmp_path,
+        FakeAgent(_outcome(fx.completed_answer_bytes(), (_event(ToolKind.GRAPH),))),
+        run_id="r2-complete",
+    )
+    with pytest.raises(br.RunConflictError, match="different input"):
+        br.execute_run(
+            runs_root=tmp_path,
+            run_id="r2-complete",
+            identity=_identity_with(case_id="different-case"),
+            agent=FakeAgent(_outcome(fx.completed_answer_bytes(), (_event(ToolKind.GRAPH),))),
+        )
+
+
+# --------------------------------------------------------------------------- #
 # Input validation
 # --------------------------------------------------------------------------- #
 
@@ -536,6 +688,41 @@ def test_invalid_run_id_rejected(tmp_path: Path) -> None:
             br.execute_run(
                 runs_root=tmp_path, run_id=bad, identity=_identity(), agent=agent
             )
+
+
+# --------------------------------------------------------------------------- #
+# AIS009-N1: policy_enforced is mandatory (always enforced, always true)
+# --------------------------------------------------------------------------- #
+
+
+def test_policy_enforced_false_rejected(tmp_path: Path) -> None:
+    """policy_enforced=False is rejected: enforcement is mandatory (AIS009-N1)."""
+    agent = FakeAgent(_outcome(fx.completed_answer_bytes(), (_event(ToolKind.GRAPH),)))
+    with pytest.raises(br.RunnerError, match="policy_enforced"):
+        br.execute_run(
+            runs_root=tmp_path,
+            run_id="n1",
+            identity=_identity(),
+            agent=agent,
+            policy_enforced=False,
+        )
+    # Rejected before any run directory is created.
+    assert not (tmp_path / "n1").exists()
+
+
+def test_policy_enforced_always_true_in_metadata(tmp_path: Path) -> None:
+    """A persisted run's metadata always records policy_enforced=true (AIS009-N1)."""
+    agent = FakeAgent(_outcome(fx.completed_answer_bytes(), (_event(ToolKind.GRAPH),)))
+    _run(tmp_path, agent, run_id="n1-true")
+    metadata = json.loads((tmp_path / "n1-true" / METADATA).read_text(encoding="utf-8"))
+    assert metadata["policy_enforced"] is True
+
+
+def test_failed_run_metadata_policy_enforced_true(tmp_path: Path) -> None:
+    """Even a failed run records policy_enforced=true (AIS009-N1)."""
+    _run(tmp_path, FakeAgent(raises=RuntimeError("boom")), run_id="n1-failed")
+    metadata = json.loads((tmp_path / "n1-failed" / METADATA).read_text(encoding="utf-8"))
+    assert metadata["policy_enforced"] is True
 
 
 def test_cli_main_remains_callable() -> None:

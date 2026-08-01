@@ -29,8 +29,10 @@ from runner.policy_validation import (
     PolicyValidationError,
     ToolEvent,
     ToolKind,
+    ToolPolicy,
     derive_metrics,
     validate_policy,
+    validate_policy_inputs,
 )
 
 REPO_ROOT = Path(__file__).resolve().parent.parent.parent
@@ -192,6 +194,32 @@ def test_empty_tool_events_valid_for_grep() -> None:
         tool_policy="grep", tool_events=(), agent_answer_status="completed"
     )
     assert result.valid
+
+
+# --------------------------------------------------------------------------- #
+# Rejectable input validation (AIS009-R1: validated before artifact writes)
+# --------------------------------------------------------------------------- #
+
+
+def test_validate_policy_inputs_valid_returns_policy() -> None:
+    """A valid policy with trusted sources resolves to the ToolPolicy enum."""
+    assert (
+        validate_policy_inputs(tool_policy="graph", tool_events=(_event(ToolKind.GRAPH),))
+        is ToolPolicy.GRAPH
+    )
+    assert validate_policy_inputs(tool_policy="grep", tool_events=()) is ToolPolicy.GREP
+
+
+def test_validate_policy_inputs_unknown_policy_rejected() -> None:
+    with pytest.raises(PolicyValidationError, match="tool_policy must be one of"):
+        validate_policy_inputs(tool_policy="unknown", tool_events=())
+
+
+def test_validate_policy_inputs_untrusted_source_rejected() -> None:
+    """Rejectable inputs are detected without needing an agent_answer_status."""
+    forged = ToolEvent(kind=ToolKind.GRAPH, source="agent:self_report", label="graph")
+    with pytest.raises(PolicyValidationError, match="untrusted source"):
+        validate_policy_inputs(tool_policy="graph", tool_events=(forged,))
 
 
 # --------------------------------------------------------------------------- #

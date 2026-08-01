@@ -133,6 +133,32 @@ def _verify_sources(tool_events: tuple[ToolEvent, ...]) -> None:
             )
 
 
+def validate_policy_inputs(
+    *,
+    tool_policy: str,
+    tool_events: tuple[ToolEvent, ...] = (),
+) -> ToolPolicy:
+    """Validate rejectable policy-validation inputs (AIS009-R1).
+
+    Raises :class:`PolicyValidationError` for an unknown ``tool_policy`` or a
+    tool event whose source is not the Runner's verifiable observation channel.
+    These are adapter/programming errors that cannot be evaluated at all; the
+    Runner calls this BEFORE persisting any artifact so a rejectable input fails
+    fast into a truthful failed run (no raw-response/answer/metadata on disk to
+    be misreported by the failed-run finalizer) rather than after the run's real
+    artifacts and metrics are already written. Returns the resolved policy.
+    """
+    try:
+        policy = ToolPolicy(tool_policy)
+    except ValueError as exc:
+        raise PolicyValidationError(
+            f"tool_policy must be one of {[p.value for p in ToolPolicy]}, "
+            f"got {tool_policy!r}"
+        ) from exc
+    _verify_sources(tool_events)
+    return policy
+
+
 def validate_policy(
     *,
     tool_policy: str,
@@ -149,16 +175,13 @@ def validate_policy(
     status is an admission violation - empty/refused answers are admissible
     (they score 0, §12) and schema-warning answers are admissible (the Judge may
     still evaluate them, §8.8).
-    """
-    try:
-        policy = ToolPolicy(tool_policy)
-    except ValueError as exc:
-        raise PolicyValidationError(
-            f"tool_policy must be one of {[p.value for p in ToolPolicy]}, "
-            f"got {tool_policy!r}"
-        ) from exc
 
-    _verify_sources(tool_events)
+    The rejectable inputs (unknown ``tool_policy``, untrusted tool-event source)
+    are validated via :func:`validate_policy_inputs`; the Runner validates them
+    separately, before artifact writes, so this function only re-validates them
+    for direct callers and never raises after artifacts are persisted.
+    """
+    policy = validate_policy_inputs(tool_policy=tool_policy, tool_events=tool_events)
 
     graph_queries = sum(1 for e in tool_events if e.kind is ToolKind.GRAPH)
     search_queries = sum(1 for e in tool_events if e.kind is ToolKind.SEARCH)

@@ -22,12 +22,21 @@ Interrupt/resume safety (acceptance criterion): the manifest is written LAST
 and atomically, so an interrupted run leaves no complete manifest and is never
 mistaken for success. Reusing a run id with a different input is rejected
 (``RunConflictError``); an already-complete identical run is returned
-idempotently.
+idempotently. The full immutable input identity (including ``case_id``/
+``task_type``) is recorded in ``run-input.json`` before execution and checked
+for every existing run, so a failed run with no agent-answer is still protected
+(AIS009-R2). Rejectable policy inputs (unknown ``tool_policy``, untrusted
+tool-event source) are validated before any artifact write, so a rejectable
+input fails into a truthful failed run rather than over real artifacts/metrics
+(AIS009-R1). Tool-policy enforcement is mandatory, so ``policy_enforced=False``
+is rejected and the audit field is always ``true`` (AIS009-N1).
 
 Correctness and cost/policy fields are isolated at the storage layer
 (acceptance criterion): ``agent-answer.json`` carries only answer content,
 ``run-metadata.json`` only identity/cost, and ``policy-result.json`` only
-compliance - each schema enforces ``additionalProperties: false``.
+compliance - each schema enforces ``additionalProperties: false``. ``run-input.json``
+is runner-internal guard state (not a manifest/scored artifact) and carries no
+correctness/cost/policy content, preserving that isolation.
 """
 
 from __future__ import annotations
@@ -52,6 +61,7 @@ from .policy_validation import (
     Violation,
     derive_metrics,
     validate_policy,
+    validate_policy_inputs,
 )
 
 MANIFEST_FILENAME = "manifest.json"
@@ -59,9 +69,11 @@ RAW_RESPONSE_FILENAME = "raw-response.txt"
 AGENT_ANSWER_FILENAME = "agent-answer.json"
 RUN_METADATA_FILENAME = "run-metadata.json"
 POLICY_RESULT_FILENAME = "policy-result.json"
+RUN_INPUT_FILENAME = "run-input.json"
 
 RUN_METADATA_SCHEMA_VERSION = "run-metadata-v1"
 MANIFEST_SCHEMA_VERSION = "manifest-v1"
+RUN_INPUT_SCHEMA_VERSION = "run-input-v1"
 
 #: The Runner-collected violation code for an agent execution failure. The run
 #: status is ``failed`` (no judgeable answer); this code records the cause in
@@ -80,6 +92,16 @@ _JUDGE_ARTIFACT_NAMES = (
     "effective_score",
 )
 
+#: ``run-input.json`` is the Runner's immutable input-identity record for the
+#: no-overwrite guard (AIS009-R2), NOT a manifest/scored artifact. It records the
+#: full :class:`RunIdentity` (including ``case_id``/``task_type``, which the
+#: run-metadata schema does not carry and which a failed run has no agent-answer
+#: to fall back on) so reuse of a run id with a different input is detected for
+#: every terminal run. It is written before execution and read first by the guard;
+#: it is deliberately not listed in the manifest (design §17 enumerates the scored
+#: artifact set) and carries no correctness/cost/policy content, preserving the
+#: storage-layer isolation of those three buckets.
+
 
 class RunStatus(str, Enum):
     """The terminal run state (acceptance criterion)."""
@@ -95,9 +117,12 @@ class RunIdentity:
     """The fixed experimental condition and agent identity for one run.
 
     These fields are Runner-authoritative: the agent cannot declare them (the
-    agent-answer schema forbids identity/tool/policy fields). They are recorded
-    in ``run-metadata.json`` (minus ``case_id``/``task_type``, which the
-    run-metadata schema does not carry) and used by the no-overwrite guard.
+    agent-answer schema forbids identity/tool/policy fields). ``tool_policy``/
+    ``agent``/``agent_model`` are recorded in ``run-metadata.json``; the full
+    identity (including ``case_id``/``task_type``, which the run-metadata schema
+    does not carry) is recorded in ``run-input.json`` and used by the
+    no-overwrite guard so every terminal run - even a failed one with no
+    agent-answer - is identity-checked (AIS009-R2).
     """
 
     case_id: str
@@ -182,14 +207,22 @@ def execute_run(
     validates tool policy into ``policy-result.json``, and writes
     ``manifest.json`` last. Judge artifacts are left ``absent`` for a later
     phase. Returns the terminal :class:`RunResult`.
+
+    ``policy_enforced`` records that tool-policy enforcement occurred; it is
+    mandatory (design §15.1), so ``False`` is rejected and the audit field is
+    always ``true`` for a persisted run (AIS009-N1).
     """
     _validate_run_id(run_id)
+    _validate_policy_enforced(policy_enforced)
     runs_root = Path(runs_root)
     run_dir = runs_root / run_id
 
     # Guard: same run id with a different input is never silently overwritten;
     # an already-complete identical run is returned idempotently (resume-safe);
-    # an incomplete identical run is re-executed to completion.
+    # an incomplete identical run is re-executed to completion. The full
+    # immutable identity (incl. case_id/task_type) is verified for every
+    # existing run via run-input.json, so a failed run with no agent-answer is
+    # still protected (AIS009-R2).
     existing = _check_existing_run(run_dir, run_id, identity)
     if existing is not None:
         return existing
@@ -197,6 +230,10 @@ def execute_run(
     started_at_dt = _now_utc()
     started_at = _iso_z(started_at_dt)
     run_dir.mkdir(parents=True, exist_ok=True)
+    # Persist the immutable input identity BEFORE execution so the no-overwrite
+    # guard can verify it for every terminal run, including a failed run that
+    # produces no agent-answer (AIS009-R2).
+    _write_run_input(run_dir, identity)
 
     # Execute the agent (Runner's observation channel). Any failure -> failed.
     try:
@@ -226,6 +263,29 @@ def execute_run(
             policy_enforced=policy_enforced,
         )
 
+    # Validate rejectable policy inputs BEFORE any artifact write (AIS009-R1):
+    # an unknown tool_policy or untrusted tool-event source is an adapter error.
+    # Failing here - before raw-response/answer/metadata exist - keeps the
+    # failed-run finalizer's terminal persistence truthful (the manifest's absent
+    # raw_response/agent_answer and zero metrics reflect reality) and makes
+    # execute_run and load_run_result agree on FAILED.
+    try:
+        validate_policy_inputs(
+            tool_policy=identity.tool_policy,
+            tool_events=outcome.tool_events,
+        )
+    except PolicyValidationError as exc:
+        return _finalize_failed_run(
+            run_dir=run_dir,
+            run_id=run_id,
+            identity=identity,
+            started_at=started_at,
+            ended_at=ended_at,
+            elapsed_ms=elapsed_ms,
+            error=f"policy_validation_error: {exc}",
+            policy_enforced=policy_enforced,
+        )
+
     # Produce agent artifacts (raw-response.txt + agent-answer.json).
     produced = produce_agent_artifacts(
         outcome.raw_response,
@@ -245,25 +305,14 @@ def execute_run(
     metadata_path = run_dir / RUN_METADATA_FILENAME
     _atomic_write_bytes(metadata_path, metadata_bytes)
 
-    try:
-        policy = validate_policy(
-            tool_policy=identity.tool_policy,
-            tool_events=outcome.tool_events,
-            agent_answer_status=produced.status.value,
-        )
-    except PolicyValidationError as exc:
-        # An untrusted tool-event source or unknown policy is an adapter error.
-        # Treat it as a failed run rather than persisting an unevaluable policy.
-        return _finalize_failed_run(
-            run_dir=run_dir,
-            run_id=run_id,
-            identity=identity,
-            started_at=started_at,
-            ended_at=ended_at,
-            elapsed_ms=elapsed_ms,
-            error=f"policy_validation_error: {exc}",
-            policy_enforced=policy_enforced,
-        )
+    # Inputs were pre-validated before the artifact writes, so this full
+    # evaluation cannot raise a PolicyValidationError over already-persisted
+    # artifacts; it only produces the compliance verdict (AIS009-R1).
+    policy = validate_policy(
+        tool_policy=identity.tool_policy,
+        tool_events=outcome.tool_events,
+        agent_answer_status=produced.status.value,
+    )
     policy_bytes = _canonical_json_bytes(policy.to_doc())
     policy_path = run_dir / POLICY_RESULT_FILENAME
     _atomic_write_bytes(policy_path, policy_bytes)
@@ -397,18 +446,45 @@ def _check_existing_run(
 ) -> RunResult | None:
     """Enforce no-silent-overwrite and idempotent resume.
 
-    * No recorded metadata                       -> ``None`` (fresh; execute).
-    * Different input (any recorded identity)    -> ``RunConflictError``.
-    * Identical input, complete (manifest present) -> :class:`RunResult`
+    * No recorded identity                            -> ``None`` (fresh; execute).
+    * Different input (any recorded identity field)   -> ``RunConflictError``.
+    * Identical input, complete (manifest present)    -> :class:`RunResult`
       (idempotent; do not re-execute).
-    * Identical input, incomplete (no manifest)  -> ``None`` (resume; execute).
+    * Identical input, incomplete (no manifest)       -> ``None`` (resume; execute).
 
-    The comparison uses the fields persisted in ``run-metadata.json``
-    (``tool_policy``/``agent``/``agent_model``) and, when the agent-answer is
-    already present, its ``case_id``/``task_type`` (run-metadata does not carry
-    them). A run with unreadable metadata from a crashed write is treated as
-    fresh (re-execute).
+    The authoritative input-identity record is ``run-input.json`` (written
+    before execution for every run, so the full immutable identity - including
+    ``case_id``/``task_type`` - is checked even for a failed run with no
+    agent-answer, AIS009-R2). Runs persisted without that sidecar (or with an
+    unreadable one) fall back to ``run-metadata.json`` (``tool_policy``/
+    ``agent``/``agent_model``) plus, when present, the agent-answer's
+    ``case_id``/``task_type``. A run with unreadable identity records from a
+    crashed write is treated as fresh (re-execute).
     """
+    # Primary path: the run-input.json sidecar carries the full identity.
+    input_path = run_dir / RUN_INPUT_FILENAME
+    if input_path.exists():
+        try:
+            recorded = json.loads(input_path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError):
+            recorded = None
+        if recorded is not None:
+            if not _recorded_identity_matches(recorded, identity):
+                raise RunConflictError(
+                    f"run id {run_id!r} already exists with a different input "
+                    f"(case_id/task_type/tool_policy/agent/agent_model); "
+                    f"refusing to overwrite"
+                )
+            # Identical input: a complete run is returned idempotently; an
+            # incomplete run (no manifest, e.g. interrupted before the atomic
+            # completion marker) is re-executed to completion.
+            if (run_dir / MANIFEST_FILENAME).exists():
+                return load_run_result(runs_root=run_dir.parent, run_id=run_id)
+            return None
+
+    # Legacy/fallback path: runs without a readable run-input.json are checked
+    # via run-metadata (tool_policy/agent/agent_model) and, when the
+    # agent-answer is present, its case_id/task_type.
     metadata_path = run_dir / RUN_METADATA_FILENAME
     if not metadata_path.exists():
         return None
@@ -527,6 +603,44 @@ def _build_run_metadata(
     }
 
 
+def _build_run_input(identity: RunIdentity) -> dict[str, Any]:
+    """Build the run-input.json document: the immutable input-identity record.
+
+    Unlike ``run-metadata.json`` (which the schema restricts to agent/model/
+    policy + cost), this carries the FULL :class:`RunIdentity` including
+    ``case_id``/``task_type``, so the no-overwrite guard can verify the complete
+    input identity for every terminal run - including a failed run that has no
+    agent-answer to fall back on (AIS009-R2). It is runner-internal guard state,
+    not a manifest/scored artifact, and carries no correctness/cost/policy
+    content.
+    """
+    return {
+        "schema_version": RUN_INPUT_SCHEMA_VERSION,
+        "case_id": identity.case_id,
+        "task_type": identity.task_type,
+        "tool_policy": identity.tool_policy,
+        "agent": identity.agent,
+        "agent_model": identity.agent_model,
+    }
+
+
+def _write_run_input(run_dir: Path, identity: RunIdentity) -> None:
+    """Atomically persist the run-input.json identity record (AIS009-R2)."""
+    doc = _canonical_json_bytes(_build_run_input(identity))
+    _atomic_write_bytes(run_dir / RUN_INPUT_FILENAME, doc)
+
+
+def _recorded_identity_matches(recorded: dict[str, Any], identity: RunIdentity) -> bool:
+    """Whether a persisted run-input.json record matches the requested identity."""
+    return (
+        recorded.get("case_id") == identity.case_id
+        and recorded.get("task_type") == identity.task_type
+        and recorded.get("tool_policy") == identity.tool_policy
+        and recorded.get("agent") == identity.agent
+        and recorded.get("agent_model") == identity.agent_model
+    )
+
+
 def _build_manifest(
     *,
     run_id: str,
@@ -624,6 +738,23 @@ def _validate_run_id(run_id: str) -> None:
         raise RunnerError("run_id must be a non-empty string")
     if "/" in run_id or "\\" in run_id or run_id in (".", ".."):
         raise RunnerError(f"run_id must be a single path component, got {run_id!r}")
+
+
+def _validate_policy_enforced(policy_enforced: bool) -> None:
+    """Tool-policy enforcement is mandatory (design §15.1, invariants).
+
+    The ``policy_enforced`` audit field records that the Runner enforced tool
+    policy for this run; validation always occurs, so the field is always
+    ``true`` for a persisted run. A caller requesting ``policy_enforced=False``
+    is asking to bypass mandatory Graph/Grep compliance enforcement, which is
+    unsupported; reject it so the audit field can never lie (AIS009-N1).
+    """
+    if not policy_enforced:
+        raise RunnerError(
+            "policy_enforced=False is not supported: tool-policy enforcement is "
+            "mandatory (design §15.1); run-metadata policy_enforced always "
+            "records that enforcement occurred"
+        )
 
 
 # --------------------------------------------------------------------------- #

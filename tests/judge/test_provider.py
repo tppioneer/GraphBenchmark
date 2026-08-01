@@ -10,7 +10,9 @@ Tests cover:
 
 from __future__ import annotations
 
+import json
 from typing import Any
+from unittest.mock import MagicMock, patch
 
 from judge.provider import (
     DEFAULT_GENERATION_PARAMS,
@@ -225,6 +227,37 @@ def test_unverifiable_model_when_no_model_flag() -> None:
     params = _params()
     provider._build_cli_args(params)
     assert provider.effective_model == UNVERIFIABLE_MODEL
+
+
+def test_call_retains_unverifiable_model_after_call_returns() -> None:
+    """N3: end-to-end ClaudeCodeCliProvider.call regression test.
+
+    When the CLI does not support --model, effective_model must remain
+    UNVERIFIABLE_MODEL after call() returns, so a future overwrite cannot
+    reintroduce R1. Uses a fake subprocess response; no live CLI.
+    """
+    provider = ClaudeCodeCliProvider.__new__(ClaudeCodeCliProvider)
+    provider._config = JudgeProviderConfig()
+    provider._cli_version = "0.0.0"
+    # --model is NOT supported by this (fake) CLI version.
+    provider._supported_flags = frozenset({"--print", "--output-format"})
+    provider._unsupported_params = ("model",)
+    provider._effective_model = provider._config.judge_model
+
+    fake_proc = MagicMock()
+    fake_proc.returncode = 0
+    fake_proc.stdout = json.dumps(_sample_judge_output())
+    fake_proc.stderr = ""
+
+    with patch("judge.provider.subprocess.run", return_value=fake_proc):
+        result = provider.call(_params())
+
+    assert result.success is True
+    assert result.failed is False
+    # R1 guard: effective_model must stay unverifiable, not be overwritten
+    # with the requested model after a successful call.
+    assert result.effective_model == UNVERIFIABLE_MODEL
+    assert result.requested_model == DEFAULT_JUDGE_MODEL
 
 
 # --------------------------------------------------------------------------- #

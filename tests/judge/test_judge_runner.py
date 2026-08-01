@@ -460,6 +460,95 @@ def test_formal_mode_rejects_model_mismatch() -> None:
 
 
 # --------------------------------------------------------------------------- #
+# N2: Judge C audit retention on model mismatch/unverifiable (§13.4/§13.5)
+# --------------------------------------------------------------------------- #
+
+
+class _ArbiterModelProblemProvider(FakeCliProvider):
+    """A/B differ (triggering arbiter C); C succeeds but its effective model
+    is unverifiable or mismatched (N2 regression)."""
+
+    def __init__(self, c_effective_model: str) -> None:
+        super().__init__(judge_output=_sample_judge_output())
+        self._call_count = 0
+        self._c_effective_model = c_effective_model
+
+    def call(self, params: JudgeCallParams) -> JudgeCallResult:
+        self._calls.append(params)
+        self._call_count += 1
+        if self._call_count == 1:
+            out = _sample_judge_output(credits={"outcome.root-cause": 1})
+            eff = "glm-5.2"
+        elif self._call_count == 2:
+            out = _sample_judge_output(credits={"outcome.root-cause": 0})
+            eff = "glm-5.2"
+        else:
+            out = _sample_judge_output(credits={"outcome.root-cause": 0.5})
+            eff = self._c_effective_model
+        return self._build_call_result(params, out, eff)
+
+    def _build_call_result(
+        self, params: JudgeCallParams, out: dict[str, Any], eff: str
+    ) -> JudgeCallResult:
+        import json
+        return JudgeCallResult(
+            success=True, label=params.label,
+            judge_output=out, raw_stdout=json.dumps(out), raw_stderr="",
+            cli_version=self._cli_version,
+            requested_model=params.judge_model,
+            effective_model=eff,
+            generation_params=dict(params.generation_params),
+            prompt_digest=params.prompt_digest,
+            elapsed_ms=10, retry_count=0, failed=False,
+            failure_reason=None, retry_exhausted=False,
+        )
+
+
+def test_formal_mode_c_unverifiable_retains_audit_and_arbiter_state() -> None:
+    """N2: when Judge C is called then found unverifiable, its audit record and
+    arbiter-used state must remain in the judge_failed result (§13.4/§13.5)."""
+    provider = _ArbiterModelProblemProvider(c_effective_model="unverifiable")
+    runner = JudgeRunner(
+        provider, config=JudgeRunConfig(judge_model="glm-5.2", run_mode="formal"),
+    )
+    result = runner.run(ex.FULL_CASE, _load_profile(), ex.FULL_GT, ex.FULL_AGENT_ANSWER)
+    assert result.success is False
+    assert result.status == "judge_failed"
+    assert result.failure_reason == "model_unverifiable"
+    # C was called - its call result and audit must be retained (§13.4).
+    assert result.judge_c is not None
+    assert result.judge_c.label == "C"
+    assert result.judge_c.effective_model == "unverifiable"
+    # Arbiter-used state must be retained.
+    assert result.arbiter_required is True
+    assert result.arbiter_called is True
+    # All three Judge calls must have audit entries (§13.4/§13.5).
+    assert len(result.audits) == 3
+    assert [a.label for a in result.audits] == ["A", "B", "C"]
+    assert result.audits[2].effective_model == "unverifiable"
+
+
+def test_formal_mode_c_mismatch_retains_audit_and_arbiter_state() -> None:
+    """N2: when Judge C is called then found mismatched, its audit record and
+    arbiter-used state must remain in the judge_failed result (§13.4/§13.5)."""
+    provider = _ArbiterModelProblemProvider(c_effective_model="claude-sonnet-4")
+    runner = JudgeRunner(
+        provider, config=JudgeRunConfig(judge_model="glm-5.2", run_mode="formal"),
+    )
+    result = runner.run(ex.FULL_CASE, _load_profile(), ex.FULL_GT, ex.FULL_AGENT_ANSWER)
+    assert result.success is False
+    assert result.status == "judge_failed"
+    assert result.failure_reason == "model_mismatch"
+    assert result.judge_c is not None
+    assert result.judge_c.effective_model == "claude-sonnet-4"
+    assert result.arbiter_required is True
+    assert result.arbiter_called is True
+    assert len(result.audits) == 3
+    assert [a.label for a in result.audits] == ["A", "B", "C"]
+    assert result.audits[2].effective_model == "claude-sonnet-4"
+
+
+# --------------------------------------------------------------------------- #
 # Prompt version constant
 # --------------------------------------------------------------------------- #
 

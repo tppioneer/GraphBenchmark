@@ -342,7 +342,7 @@ class JudgeRunner:
                 blind_input=blind_input, prompt_digest=prompt_digest,
                 agent_answer_digest=agent_answer_digest,
                 ground_truth_digest=ground_truth_digest,
-                judge_a=judge_a, judge_b=judge_b,
+                judge_a=judge_a, judge_b=judge_b, judge_c=judge_c,
             )
             if model_check is not None:
                 return model_check
@@ -426,11 +426,14 @@ class JudgeRunner:
         ground_truth_digest: str = "",
         judge_a: JudgeCallResult | None = None,
         judge_b: JudgeCallResult | None = None,
+        judge_c: JudgeCallResult | None = None,
     ) -> JudgeRunResult | None:
         if run_mode != "formal":
             return None
+        # §13.4/§13.5: every Judge call (including C) and the original failure
+        # audit must remain recorded in the returned judge_failed result.
         audits = []
-        for j in (judge_a, judge_b):
+        for j in (judge_a, judge_b, judge_c):
             if j is not None:
                 audits.append(self._to_audit(j))
         if result.effective_model == UNVERIFIABLE_MODEL:
@@ -440,7 +443,7 @@ class JudgeRunner:
                 agent_answer_digest=agent_answer_digest,
                 ground_truth_digest=ground_truth_digest, start=start,
                 status="judge_failed", failure_reason="model_unverifiable",
-                judge_a=judge_a, judge_b=judge_b, audits=audits,
+                judge_a=judge_a, judge_b=judge_b, judge_c=judge_c, audits=audits,
             )
         if result.effective_model != result.requested_model:
             return self._build_result(
@@ -449,7 +452,7 @@ class JudgeRunner:
                 agent_answer_digest=agent_answer_digest,
                 ground_truth_digest=ground_truth_digest, start=start,
                 status="judge_failed", failure_reason="model_mismatch",
-                judge_a=judge_a, judge_b=judge_b, audits=audits,
+                judge_a=judge_a, judge_b=judge_b, judge_c=judge_c, audits=audits,
             )
         return None
 

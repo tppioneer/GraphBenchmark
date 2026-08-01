@@ -25,3 +25,10 @@ None.
 - Ruff and `git diff --check` passed.
 
 Status: `VERIFIED`; integration is pending explicit approval.
+
+## Integration verification
+
+- Integrated commit: `d8e64d9` (cherry-pick of verified implementation `44fc06e`).
+- Full suite: `585 passed`.
+- Ruff, format check, and diff check passed.
+- Final status: `INTEGRATED`.

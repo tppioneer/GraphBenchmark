@@ -1,6 +1,6 @@
 # AIS-006: 形成 Judge 共识和 v1 有效分
 
-State: VERIFIED
+State: INTEGRATED
 
 ## Objective
 
@@ -27,6 +27,7 @@ State: VERIFIED
 - Reported checks: task tests `66 passed`; full suite `585 passed`; Ruff, format, and diff check passed
 - Independent review: OpenCode (`ark-plan-qlw/deepseek-v4-flash`) returned `PASS` with no findings.
 - Controller verification: task tests `66 passed`; full suite `585 passed`; Ruff and diff check passed.
+- Integration: cherry-picked as `d8e64d9`; full suite `585 passed`; Ruff, format, and diff check passed.
 
 ## Invariants
 

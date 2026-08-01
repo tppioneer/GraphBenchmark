@@ -1,6 +1,6 @@
 # AIS-006: 形成 Judge 共识和 v1 有效分
 
-State: IMPLEMENTING
+State: READY_FOR_REVIEW
 
 ## Objective
 
@@ -19,6 +19,12 @@ State: IMPLEMENTING
 - Branch: `codex/ais-006-consensus-adjudication`
 - Expected HEAD: `e868cab20908ee1fe8c4e1845333e1774c3e376f`
 - Return channel: commit + AGENT_RESULT
+
+## Execution result
+
+- Executor: Claude Code (`glm-5.2`)
+- Head: `44fc06e3a12b94aeed85f666dd4c203f45c710c0`
+- Reported checks: task tests `66 passed`; full suite `585 passed`; Ruff, format, and diff check passed
 
 ## Invariants
 

@@ -1,6 +1,6 @@
 # AIS-008: 集成 Claude Code CLI Judge、提示和条件仲裁
 
-State: READY_FOR_REVIEW
+State: CHANGES_REQUIRED
 
 ## Execution result
 
@@ -8,6 +8,10 @@ State: READY_FOR_REVIEW
 - Head: `1fd1fdccce94c44843be6259d27d11bbf9a95f40`
 - Reported checks: Judge tests `200 passed`; full suite `620 passed`; diff check passed.
 - Declared risk: no live Claude Code CLI probe; Fake CLI is used for tests.
+
+## Accepted remediation
+
+- Review findings R1--R3 are accepted for a narrow remediation pass: mark unverifiable effective models instead of claiming the requested model, redact complete JWTs, and reject formal runs whose requested/effective models differ or cannot be verified.
 
 ## Objective
 

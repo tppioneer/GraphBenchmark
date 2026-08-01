@@ -1,6 +1,13 @@
 # AIS-008: 集成 Claude Code CLI Judge、提示和条件仲裁
 
-State: IMPLEMENTING
+State: READY_FOR_REVIEW
+
+## Execution result
+
+- Executor: OpenCode (`ark-plan-qlw/deepseek-v4-flash`, `--auto`)
+- Head: `1fd1fdccce94c44843be6259d27d11bbf9a95f40`
+- Reported checks: Judge tests `200 passed`; full suite `620 passed`; diff check passed.
+- Declared risk: no live Claude Code CLI probe; Fake CLI is used for tests.
 
 ## Objective
 

@@ -190,9 +190,7 @@ def test_unknown_tool_policy_rejected() -> None:
 
 def test_empty_tool_events_valid_for_grep() -> None:
     """Grep policy with no tool events at all is valid (0 Graph queries)."""
-    result = validate_policy(
-        tool_policy="grep", tool_events=(), agent_answer_status="completed"
-    )
+    result = validate_policy(tool_policy="grep", tool_events=(), agent_answer_status="completed")
     assert result.valid
 
 

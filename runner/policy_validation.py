@@ -152,8 +152,7 @@ def validate_policy_inputs(
         policy = ToolPolicy(tool_policy)
     except ValueError as exc:
         raise PolicyValidationError(
-            f"tool_policy must be one of {[p.value for p in ToolPolicy]}, "
-            f"got {tool_policy!r}"
+            f"tool_policy must be one of {[p.value for p in ToolPolicy]}, got {tool_policy!r}"
         ) from exc
     _verify_sources(tool_events)
     return policy
@@ -204,9 +203,7 @@ def validate_policy(
             )
             observations.append("Graph policy produced 0 verified Graph queries.")
         else:
-            observations.append(
-                f"Graph policy produced {graph_queries} verified Graph query(ies)."
-            )
+            observations.append(f"Graph policy produced {graph_queries} verified Graph query(ies).")
     elif policy is ToolPolicy.GREP:
         if graph_queries > 0:
             violations.append(

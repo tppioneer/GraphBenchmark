@@ -384,18 +384,34 @@ def test_correctness_cost_policy_fields_isolated(tmp_path: Path) -> None:
 
     # agent-answer carries no Runner-collected identity/tool/cost/policy fields.
     forbidden_in_answer = {
-        "agent", "agent_model", "tool_policy", "metrics", "violations", "valid",
+        "agent",
+        "agent_model",
+        "tool_policy",
+        "metrics",
+        "violations",
+        "valid",
     }
     assert not (set(answer) & forbidden_in_answer)
 
     # run-metadata carries only identity + cost; no answer/correctness/policy.
     forbidden_in_metadata = {
-        "answer", "findings", "evidence", "violations", "valid", "case_id", "task_type",
+        "answer",
+        "findings",
+        "evidence",
+        "violations",
+        "valid",
+        "case_id",
+        "task_type",
     }
     assert not (set(metadata) & forbidden_in_metadata)
     assert set(metadata["metrics"]) == {
-        "tool_call_count", "files_read_count", "graph_query_count",
-        "search_query_count", "elapsed_ms", "input_tokens", "output_tokens",
+        "tool_call_count",
+        "files_read_count",
+        "graph_query_count",
+        "search_query_count",
+        "elapsed_ms",
+        "input_tokens",
+        "output_tokens",
     }
 
     # policy-result carries only compliance; no identity/cost/answer content.
@@ -460,10 +476,18 @@ def test_half_done_run_is_rerun_not_treated_as_success(tmp_path: Path) -> None:
         "policy_enforced": True,
         "started_at": "2026-01-01T00:00:00Z",
         "ended_at": "2026-01-01T00:00:01Z",
-        "metrics": {k: 0 for k in (
-            "tool_call_count", "files_read_count", "graph_query_count",
-            "search_query_count", "elapsed_ms", "input_tokens", "output_tokens",
-        )},
+        "metrics": {
+            k: 0
+            for k in (
+                "tool_call_count",
+                "files_read_count",
+                "graph_query_count",
+                "search_query_count",
+                "elapsed_ms",
+                "input_tokens",
+                "output_tokens",
+            )
+        },
     }
     (run_dir / METADATA).write_text(json.dumps(partial_metadata), encoding="utf-8")
 
@@ -576,9 +600,7 @@ def test_unknown_tool_policy_fails_before_artifact_writes(tmp_path: Path) -> Non
         agent_model="glm-5.2",
     )
     agent = FakeAgent(_outcome(fx.completed_answer_bytes(), (_event(ToolKind.GRAPH),)))
-    result = br.execute_run(
-        runs_root=tmp_path, run_id="r1-policy", identity=identity, agent=agent
-    )
+    result = br.execute_run(runs_root=tmp_path, run_id="r1-policy", identity=identity, agent=agent)
     assert result.status is br.RunStatus.FAILED
     run_dir = tmp_path / "r1-policy"
     assert not (run_dir / RAW).exists()
@@ -685,9 +707,7 @@ def test_invalid_run_id_rejected(tmp_path: Path) -> None:
     agent = FakeAgent(_outcome(fx.completed_answer_bytes(), (_event(ToolKind.GRAPH),)))
     for bad in ("", "a/b", "a\\b", ".", ".."):
         with pytest.raises(br.RunnerError):
-            br.execute_run(
-                runs_root=tmp_path, run_id=bad, identity=_identity(), agent=agent
-            )
+            br.execute_run(runs_root=tmp_path, run_id=bad, identity=_identity(), agent=agent)
 
 
 # --------------------------------------------------------------------------- #

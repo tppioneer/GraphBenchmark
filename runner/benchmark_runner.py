@@ -150,9 +150,7 @@ class AgentRunOutcome:
 class AgentAdapter(Protocol):
     """The Runner's observation channel around the agent under test."""
 
-    def execute(
-        self, *, case_id: str, task_type: str, tool_policy: str
-    ) -> AgentRunOutcome:
+    def execute(self, *, case_id: str, task_type: str, tool_policy: str) -> AgentRunOutcome:
         """Run the agent and return the observed outcome.
 
         The adapter wraps/observes the agent's calls and returns the model's raw
@@ -441,9 +439,7 @@ def _finalize_failed_run(
 # --------------------------------------------------------------------------- #
 
 
-def _check_existing_run(
-    run_dir: Path, run_id: str, identity: RunIdentity
-) -> RunResult | None:
+def _check_existing_run(run_dir: Path, run_id: str, identity: RunIdentity) -> RunResult | None:
     """Enforce no-silent-overwrite and idempotent resume.
 
     * No recorded identity                            -> ``None`` (fresh; execute).

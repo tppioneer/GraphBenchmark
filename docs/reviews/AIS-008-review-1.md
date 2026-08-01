@@ -41,3 +41,13 @@ Verdict: `CHANGES_REQUIRED`
 Base remediation on `1fd1fdccce94c44843be6259d27d11bbf9a95f40`.
 
 Resolve: R1, R2, R3. Do not change unrelated behavior or task-controlled documentation. Add focused regression tests, then run task tests, full tests, and diff check.
+
+## Remediation review
+
+Reviewed range: `1fd1fdccce94c44843be6259d27d11bbf9a95f40..cffa8473494bdad1e2c19da8858ce53482dd506e`
+
+Verdict: `PASS_WITH_NOTES`
+
+- R1, R2, and R3 are verified fixed; Judge tests `204 passed`, full suite `624 passed`, and diff check passed.
+- N2 is accepted for follow-up: when Judge C itself causes a model-consistency rejection, its audit record must still be retained, per design §13.4 and §13.5.
+- N3 is accepted for follow-up: add an end-to-end provider-call regression test so an effective-model overwrite cannot silently return.

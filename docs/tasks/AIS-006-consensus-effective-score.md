@@ -1,6 +1,6 @@
 # AIS-006: 形成 Judge 共识和 v1 有效分
 
-State: DRAFT
+State: IMPLEMENTING
 
 ## Objective
 
@@ -15,9 +15,9 @@ State: DRAFT
 ## Execution envelope
 
 - Executor: Codex subagent or external terminal agent
-- Working directory: 派发时创建的绝对 worktree 路径
+- Working directory: `F:\\develop\\codes\\GraphBenchmark-ai-score-v1-worktrees\\ais-006-consensus-adjudication`
 - Branch: `codex/ais-006-consensus-adjudication`
-- Expected HEAD: 派发时填写完整 SHA
+- Expected HEAD: `e868cab20908ee1fe8c4e1845333e1774c3e376f`
 - Return channel: commit + AGENT_RESULT
 
 ## Invariants

@@ -546,6 +546,40 @@ def test_critical_error_unknown_item_rejected() -> None:
         )
 
 
+def test_empty_critical_error_codes_declaration_allows_none() -> None:
+    """An explicit ``critical_error_codes: []`` allows no codes (AIS005-F1).
+
+    The frozen fallback must apply only when the profile or key is absent, not
+    when the profile explicitly declares an empty set of allowed critical-error
+    codes. A reverse critical-relation error that the frozen set would otherwise
+    permit is rejected under the empty declaration.
+    """
+    with pytest.raises(AggregationError, match="not declared by the profile"):
+        aggregate(
+            _gt(),
+            _full_credits(),
+            critical_errors=[_reverse_error()],
+            task_profile={"critical_error_codes": []},
+        )
+
+
+def test_absent_critical_error_codes_key_uses_frozen_fallback() -> None:
+    """A profile missing the ``critical_error_codes`` key keeps the frozen set.
+
+    The other half of AIS005-F1: the frozen fallback is reserved for the
+    absent-profile / absent-key case, so an empty-dict profile still permits the
+    frozen critical-error codes and the reverse cap can fire.
+    """
+    result = aggregate(
+        _gt(),
+        _credits(**{"reasoning.failure-chain": 0}),
+        critical_errors=[_reverse_error()],
+        task_profile={},
+    )
+    assert result.critical_cap.applied is True
+    assert result.critical_cap.code == REVERSE_CRITICAL_RELATION_ZERO
+
+
 # --------------------------------------------------------------------------- #
 # §12 Boundary cases (acceptance criterion 5)
 # --------------------------------------------------------------------------- #

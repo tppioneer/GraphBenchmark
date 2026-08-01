@@ -278,13 +278,13 @@ def _resolve_cap_values(common_profile: dict[str, Any] | None) -> dict[str, Deci
 def _allowed_critical_codes(task_profile: dict[str, Any] | None) -> set[str]:
     """Critical-error codes declared by the task profile (frozen fallback).
 
-    The Judge may only return codes the Profile declares (§12); the frozen set
-    is used when no profile is supplied.
+    The Judge may only return codes the Profile declares (§12). The frozen set
+    is used only when no profile is supplied or the profile omits the
+    ``critical_error_codes`` key; an explicit empty declaration (``[]``) is
+    honored and allows no critical-error codes.
     """
-    if isinstance(task_profile, dict):
-        declared = task_profile.get("critical_error_codes", [])
-        if declared:
-            return set(declared)
+    if isinstance(task_profile, dict) and "critical_error_codes" in task_profile:
+        return set(task_profile["critical_error_codes"])
     return set(FROZEN_CRITICAL_CAP_CODES)
 
 

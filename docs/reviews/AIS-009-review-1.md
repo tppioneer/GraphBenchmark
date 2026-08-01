@@ -50,3 +50,12 @@ Verdict: `CHANGES_REQUIRED`
 - `AIS009-R1`, `AIS009-R2`, `AIS009-N1`: resolved. Independent reproduction and review confirmed truthful pre-write policy rejection, all-terminal-run identity guarding, and mandatory truthful policy enforcement.
 - Accepted non-blocking notes: `run-input.json` remains Runner-internal guard state without a formal cross-component Schema; rejected policy inputs have no raw response, an existing design boundary also used for execution failures.
 - `AIS009-R3` — Low — Formatting check fails. Controller verification found `ruff format --check` would reformat `runner/benchmark_runner.py`, `runner/policy_validation.py`, `tests/runner/test_benchmark_runner.py`, and `tests/runner/test_policy_validation.py`. Run the formatter on only these four task-scope files, commit the mechanical change, then rerun the required tests and format check.
+
+## Format-remediation review
+
+Reviewed range: `8a593e84d145e44b9a920bf378acf386ae72127d..ac69d7125b35d876b1ae3653b010ec26490aa62d`
+
+Verdict: `PASS`
+
+- `AIS009-R3`: resolved by a formatting-only commit touching exactly the four task-scope Runner and test files; no logic changed.
+- Controller verification: Runner tests `82 passed`; full suite `455 passed`; Ruff lint, repository-wide format check, and diff check passed.

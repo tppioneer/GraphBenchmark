@@ -47,11 +47,16 @@ DEFAULT_GENERATION_PARAMS: dict[str, Any] = {
 #: Default timeout per Judge call (milliseconds).
 DEFAULT_JUDGE_TIMEOUT_MS = 300000
 
+#: Sentinel value for "effective model cannot be verified" (R1).
+UNVERIFIABLE_MODEL = "unverifiable"
+
 #: Patterns whose matches in output are replaced with ``<REDACTED>``.
-_SECRET_PATTERNS: list[re.Pattern] = [
-    re.compile(r"(?i)(api[_-]?key|token|password|secret|credential)[=:]\s*\S+"),
-    re.compile(r"(?i)(Authorization|X-API-Key):\s*\S+"),
-    re.compile(r"\b(eyJ[a-zA-Z0-9_-]+\.eyJ[a-zA-Z0-9_-]+\.[a-zA-Z0-9_-]+)\b"),
+#: Patterns whose matches in output are replaced with ``<REDACTED>``.
+#: Each entry is ``(pattern, replacement_template)``.
+_SECRET_PATTERNS: list[tuple[re.Pattern, str]] = [
+    (re.compile(r"(?i)(api[_-]?key|token|password|secret|credential)[=:]\s*\S+"), r"\1=<REDACTED>"),
+    (re.compile(r"(?i)(Authorization|X-API-Key):\s*\S+"), r"\1=<REDACTED>"),
+    (re.compile(r"\b(eyJ[a-zA-Z0-9_-]+\.eyJ[a-zA-Z0-9_-]+\.[a-zA-Z0-9_-]+)\b"), r"<REDACTED>"),
 ]
 
 
@@ -162,8 +167,8 @@ class JudgeProvider(abc.ABC):
 # --- Secret redaction ------------------------------------------------------ #
 
 def redact_secrets(text: str) -> str:
-    for pattern in _SECRET_PATTERNS:
-        text = pattern.sub(r"\1=<REDACTED>", text)
+    for pattern, replacement in _SECRET_PATTERNS:
+        text = pattern.sub(replacement, text)
     return text
 
 
@@ -259,7 +264,7 @@ class ClaudeCodeCliProvider(JudgeProvider):
             args.extend(["--model", requested])
             self._effective_model = requested
         else:
-            self._effective_model = requested
+            self._effective_model = UNVERIFIABLE_MODEL
 
         if "--json-schema" in self._supported_flags:
             schema = _build_output_schema()
@@ -338,7 +343,6 @@ class ClaudeCodeCliProvider(JudgeProvider):
                     )
 
                 output = self._parse_output(stdout)
-                self._effective_model = params.judge_model
                 return JudgeCallResult(
                     success=True,
                     label=params.label,

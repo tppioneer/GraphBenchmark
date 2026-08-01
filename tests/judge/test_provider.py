@@ -16,6 +16,8 @@ from judge.provider import (
     DEFAULT_GENERATION_PARAMS,
     DEFAULT_JUDGE_MODEL,
     DEFAULT_PROMPT_DIGEST,
+    UNVERIFIABLE_MODEL,
+    ClaudeCodeCliProvider,
     FakeCliProvider,
     JudgeCallParams,
     JudgeProviderConfig,
@@ -173,6 +175,14 @@ def test_redact_preserves_normal_text() -> None:
     assert result == text
 
 
+def test_redact_jwt_fully_removed() -> None:
+    jwt = "eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxMjM0NTY3ODkwIn0.signature_part"
+    text = f"token {jwt} here"
+    result = redact_secrets(text)
+    assert jwt not in result
+    assert "<REDACTED>" in result
+
+
 # --------------------------------------------------------------------------- #
 # Output schema
 # --------------------------------------------------------------------------- #
@@ -198,6 +208,23 @@ def test_output_schema_credit_enum() -> None:
 def test_output_schema_no_additional_properties() -> None:
     schema = _build_output_schema()
     assert schema.get("additionalProperties") is False
+
+
+# --------------------------------------------------------------------------- #
+# R1: Unverifiable model when --model is not supported
+# --------------------------------------------------------------------------- #
+
+
+def test_unverifiable_model_when_no_model_flag() -> None:
+    provider = ClaudeCodeCliProvider.__new__(ClaudeCodeCliProvider)
+    provider._config = JudgeProviderConfig()
+    provider._cli_version = "0.0.0"
+    provider._supported_flags = frozenset({"--print", "--output-format"})
+    provider._unsupported_params = ("model",)
+    provider._effective_model = provider._config.judge_model
+    params = _params()
+    provider._build_cli_args(params)
+    assert provider.effective_model == UNVERIFIABLE_MODEL
 
 
 # --------------------------------------------------------------------------- #

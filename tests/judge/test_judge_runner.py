@@ -426,6 +426,40 @@ def test_timeout_failure_propagated() -> None:
 
 
 # --------------------------------------------------------------------------- #
+# R3: Model-consistency rejection in formal mode
+# --------------------------------------------------------------------------- #
+
+
+def test_formal_mode_rejects_unverifiable_model() -> None:
+    provider = FakeCliProvider(
+        judge_output=_sample_judge_output(), effective_model="unverifiable",
+    )
+    runner = JudgeRunner(
+        provider, config=JudgeRunConfig(judge_model="glm-5.2", run_mode="formal"),
+    )
+    result = runner.run(ex.FULL_CASE, _load_profile(), ex.FULL_GT, ex.FULL_AGENT_ANSWER)
+    assert result.success is False
+    assert result.status == "judge_failed"
+    assert result.failure_reason == "model_unverifiable"
+    assert result.judge_a is not None
+
+
+def test_formal_mode_rejects_model_mismatch() -> None:
+    provider = FakeCliProvider(
+        judge_output=_sample_judge_output(), effective_model="claude-sonnet-4",
+    )
+    runner = JudgeRunner(
+        provider,
+        config=JudgeRunConfig(judge_model="glm-5.2", run_mode="formal"),
+    )
+    result = runner.run(ex.FULL_CASE, _load_profile(), ex.FULL_GT, ex.FULL_AGENT_ANSWER)
+    assert result.success is False
+    assert result.status == "judge_failed"
+    assert result.failure_reason == "model_mismatch"
+    assert result.judge_a is not None
+
+
+# --------------------------------------------------------------------------- #
 # Prompt version constant
 # --------------------------------------------------------------------------- #
 

@@ -40,6 +40,7 @@ from judge.provider import (
     DEFAULT_JUDGE_MODEL,
     DEFAULT_JUDGE_TIMEOUT_MS,
     DEFAULT_PROMPT_DIGEST,
+    UNVERIFIABLE_MODEL,
     JudgeCallParams,
     JudgeCallResult,
     JudgeProvider,
@@ -232,6 +233,16 @@ class JudgeRunner:
                 judge_a=judge_a, audits=[self._to_audit(judge_a)],
             )
 
+        # R3: model-consistency check for formal mode.
+        model_check = self._reject_on_model_mismatch(
+            judge_a, run_mode, start,
+            blind_input=blind_input, prompt_digest=prompt_digest,
+            agent_answer_digest=agent_answer_digest,
+            ground_truth_digest=ground_truth_digest, judge_a=judge_a,
+        )
+        if model_check is not None:
+            return model_check
+
         if run_mode == "development":
             elapsed = int((time.monotonic() - start) * 1000)
             result = JudgeRunResult(
@@ -274,6 +285,17 @@ class JudgeRunner:
                 audits=[self._to_audit(judge_a), self._to_audit(judge_b)],
             )
 
+        # R3: model-consistency check for formal mode.
+        model_check = self._reject_on_model_mismatch(
+            judge_b, run_mode, start,
+            blind_input=blind_input, prompt_digest=prompt_digest,
+            agent_answer_digest=agent_answer_digest,
+            ground_truth_digest=ground_truth_digest,
+            judge_a=judge_a, judge_b=judge_b,
+        )
+        if model_check is not None:
+            return model_check
+
         # Check if arbiter is needed.
         arbiter_required = False
         arbiter_called = False
@@ -314,6 +336,16 @@ class JudgeRunner:
                             self._to_audit(judge_b),
                             self._to_audit(judge_c)],
                 )
+            # R3: model-consistency check for formal mode.
+            model_check = self._reject_on_model_mismatch(
+                judge_c, run_mode, start,
+                blind_input=blind_input, prompt_digest=prompt_digest,
+                agent_answer_digest=agent_answer_digest,
+                ground_truth_digest=ground_truth_digest,
+                judge_a=judge_a, judge_b=judge_b,
+            )
+            if model_check is not None:
+                return model_check
             arbiter_called = True
 
         audits = [self._to_audit(judge_a), self._to_audit(judge_b)]
@@ -382,6 +414,44 @@ class JudgeRunner:
                 failure_reason=str(exc),
                 retry_exhausted=True,
             )
+
+    def _reject_on_model_mismatch(
+        self,
+        result: JudgeCallResult,
+        run_mode: str,
+        start: float,
+        blind_input: Mapping[str, Any] | None = None,
+        prompt_digest: str = "",
+        agent_answer_digest: str = "",
+        ground_truth_digest: str = "",
+        judge_a: JudgeCallResult | None = None,
+        judge_b: JudgeCallResult | None = None,
+    ) -> JudgeRunResult | None:
+        if run_mode != "formal":
+            return None
+        audits = []
+        for j in (judge_a, judge_b):
+            if j is not None:
+                audits.append(self._to_audit(j))
+        if result.effective_model == UNVERIFIABLE_MODEL:
+            return self._build_result(
+                success=False, run_mode=run_mode,
+                blind_input=blind_input, prompt_digest=prompt_digest,
+                agent_answer_digest=agent_answer_digest,
+                ground_truth_digest=ground_truth_digest, start=start,
+                status="judge_failed", failure_reason="model_unverifiable",
+                judge_a=judge_a, judge_b=judge_b, audits=audits,
+            )
+        if result.effective_model != result.requested_model:
+            return self._build_result(
+                success=False, run_mode=run_mode,
+                blind_input=blind_input, prompt_digest=prompt_digest,
+                agent_answer_digest=agent_answer_digest,
+                ground_truth_digest=ground_truth_digest, start=start,
+                status="judge_failed", failure_reason="model_mismatch",
+                judge_a=judge_a, judge_b=judge_b, audits=audits,
+            )
+        return None
 
     def _check_cache(
         self,

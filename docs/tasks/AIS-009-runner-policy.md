@@ -1,6 +1,6 @@
 # AIS-009: 运行 Agent 并独立采集策略与成本指标
 
-State: CHANGES_REQUIRED
+State: READY_FOR_REVIEW
 
 ## Objective
 
@@ -32,6 +32,8 @@ Runner 以固定实验条件执行被测 Agent，生成完整 run artifact，并
 - Reviewed head: `55ff91a6dd310fe9f2f6890d018e05151d7c1439`
 - Verdict: `CHANGES_REQUIRED`
 - Accepted findings: `AIS009-R1`, `AIS009-R2`, `AIS009-N1`
+- Remediation head: `8a593e84d145e44b9a920bf378acf386ae72127d`
+- Remediation checks: task tests `53 passed`; full suite `455 passed`; Ruff and diff check passed
 
 ## Invariants
 

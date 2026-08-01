@@ -1,6 +1,6 @@
 # AIS-009: 运行 Agent 并独立采集策略与成本指标
 
-State: VERIFIED
+State: INTEGRATED
 
 ## Objective
 
@@ -37,6 +37,8 @@ Runner 以固定实验条件执行被测 Agent，生成完整 run artifact，并
 - Final controller verification: functional tests and Ruff lint passed, but `ruff format --check` requires formatting in four changed files (`AIS009-R3`)
 - Format remediation head: `ac69d7125b35d876b1ae3653b010ec26490aa62d`
 - Final controller verification: task tests `82 passed`; full suite `455 passed`; Ruff, format, and diff checks passed
+- Integrated commits: `fa541e3`, `af6189d`, `7550146`
+- Integrated verification: full suite `519 passed`; Ruff, format, pip check, and diff check passed
 
 ## Invariants
 

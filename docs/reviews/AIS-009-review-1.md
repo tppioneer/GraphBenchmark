@@ -59,3 +59,9 @@ Verdict: `PASS`
 
 - `AIS009-R3`: resolved by a formatting-only commit touching exactly the four task-scope Runner and test files; no logic changed.
 - Controller verification: Runner tests `82 passed`; full suite `455 passed`; Ruff lint, repository-wide format check, and diff check passed.
+
+## Integration verification
+
+Integrated commits: `fa541e3`, `af6189d`, `7550146`.
+
+Combined integration verification: full suite `519 passed`; Ruff, format, pip check, and diff check passed.

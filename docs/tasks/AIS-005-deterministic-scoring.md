@@ -1,6 +1,6 @@
 # AIS-005: 确定性聚合 item、维度、总分和 critical cap
 
-State: VERIFIED
+State: INTEGRATED
 
 ## Objective
 
@@ -35,6 +35,8 @@ State: VERIFIED
 - Remediation head: `1167de1a8a578ec47f33556cfa737aa9ba291684`
 - Remediation checks: task tests `64 passed`; full suite `466 passed`; diff check passed
 - Final controller verification: `PASS`; task tests `64 passed`, full suite `466 passed`, Ruff and format checks passed
+- Integrated commits: `b632c99`, `8ae816e`
+- Integrated verification: full suite `519 passed`; Ruff, format, pip check, and diff check passed
 
 ## Invariants
 

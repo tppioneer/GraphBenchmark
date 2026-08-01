@@ -25,3 +25,12 @@ Verdict: `CHANGES_REQUIRED`
 Base remediation on `f36711e2682cd36d6ca89a3a45a7fef8da36f0c5`.
 
 Resolve: `AIS005-F1`. Add a regression test for an explicitly empty `critical_error_codes` list. Avoid changes outside the original AIS-005 scope.
+
+## Remediation review
+
+Reviewed range: `f36711e2682cd36d6ca89a3a45a7fef8da36f0c5..1167de1a8a578ec47f33556cfa737aa9ba291684`
+
+Verdict: `PASS`
+
+- `AIS005-F1`: resolved. An explicit empty `critical_error_codes` declaration now returns an empty allowlist; only an absent profile/key uses the frozen fallback. Both paths have focused regression coverage.
+- Controller verification: task tests `64 passed`; full suite `466 passed`; Ruff, format, and diff checks passed.

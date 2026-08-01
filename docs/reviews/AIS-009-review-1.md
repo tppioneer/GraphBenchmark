@@ -40,3 +40,13 @@ Verdict: `CHANGES_REQUIRED`
 Base remediation on `55ff91a6dd310fe9f2f6890d018e05151d7c1439`.
 
 Resolve: `AIS009-R1`, `AIS009-R2`, `AIS009-N1`. Add targeted regressions for each reachable failure/identity/flag path. Avoid changes outside the original AIS-009 scope.
+
+## Remediation review
+
+Reviewed range: `55ff91a6dd310fe9f2f6890d018e05151d7c1439..8a593e84d145e44b9a920bf378acf386ae72127d`
+
+Verdict: `CHANGES_REQUIRED`
+
+- `AIS009-R1`, `AIS009-R2`, `AIS009-N1`: resolved. Independent reproduction and review confirmed truthful pre-write policy rejection, all-terminal-run identity guarding, and mandatory truthful policy enforcement.
+- Accepted non-blocking notes: `run-input.json` remains Runner-internal guard state without a formal cross-component Schema; rejected policy inputs have no raw response, an existing design boundary also used for execution failures.
+- `AIS009-R3` — Low — Formatting check fails. Controller verification found `ruff format --check` would reformat `runner/benchmark_runner.py`, `runner/policy_validation.py`, `tests/runner/test_benchmark_runner.py`, and `tests/runner/test_policy_validation.py`. Run the formatter on only these four task-scope files, commit the mechanical change, then rerun the required tests and format check.

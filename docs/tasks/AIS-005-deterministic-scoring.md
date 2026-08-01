@@ -1,6 +1,6 @@
 # AIS-005: 确定性聚合 item、维度、总分和 critical cap
 
-State: READY_FOR_REVIEW
+State: VERIFIED
 
 ## Objective
 
@@ -34,6 +34,7 @@ State: READY_FOR_REVIEW
 - Accepted finding: `AIS005-F1`
 - Remediation head: `1167de1a8a578ec47f33556cfa737aa9ba291684`
 - Remediation checks: task tests `64 passed`; full suite `466 passed`; diff check passed
+- Final controller verification: `PASS`; task tests `64 passed`, full suite `466 passed`, Ruff and format checks passed
 
 ## Invariants
 

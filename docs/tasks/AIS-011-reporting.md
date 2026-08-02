@@ -1,6 +1,6 @@
 # AIS-011: 生成 absolute、paired、稳定性与成本报告
 
-State: DRAFT
+State: IMPLEMENTING
 
 ## Objective
 
@@ -14,10 +14,10 @@ State: DRAFT
 
 ## Execution envelope
 
-- Executor: Codex subagent or external terminal agent
-- Working directory: 派发时创建的绝对 worktree 路径
+- Executor: Claude Code (`glm-5.2`, automatic permission mode)
+- Working directory: `F:\\develop\\codes\\GraphBenchmark-ai-score-v1-worktrees\\ais-011-reporting`
 - Branch: `codex/ais-011-reporting`
-- Expected HEAD: 派发时填写完整 SHA
+- Expected HEAD: `96818da358c4a8f477f17cb2a79d30e9f4d5206e`
 - Return channel: commit + rendered sample report + AGENT_RESULT
 
 ## Invariants

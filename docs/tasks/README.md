@@ -29,7 +29,7 @@
 | `AIS-008` | 集成 Claude Code CLI Judge、提示和仲裁调用 | INTEGRATED | AIS-006, AIS-007 |
 | `AIS-009` | 运行 Agent 并独立采集策略/成本指标 | INTEGRATED | AIS-003, AIS-004 |
 | `AIS-010` | 可选建立三个 Profile 的人工校准诊断 | DRAFT | AIS-006, AIS-008 |
-| `AIS-011` | 生成 absolute、paired 和成本报告 | DRAFT | AIS-006, AIS-009 |
+| `AIS-011` | 生成 absolute、paired 和成本报告 | IMPLEMENTING | AIS-006, AIS-009 |
 | `AIS-012` | 端到端冻结并执行正式实验 | DRAFT | AIS-008, AIS-009, AIS-011 |
 
 ## 依赖与建议批次

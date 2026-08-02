@@ -1,6 +1,6 @@
 # AIS-012: 端到端冻结并执行正式实验
 
-State: IMPLEMENTING
+State: BLOCKED
 
 ## Execution
 
@@ -8,6 +8,7 @@ State: IMPLEMENTING
 - Fixed base: `23731d7424a776a55c2ccaf152820d3e3ee4fdcc`
 - Isolated worktree: `F:\develop\codes\GraphBenchmark-ai-score-v1-worktrees\ais-012-e2e-release`
 - Dispatch mode: preflight first; formal Judge execution is permitted only after all frozen-input and credential-availability gates pass.
+- Preflight result (2026-08-03): BLOCKED. No approved formal `cases`/GT set, frozen formal manifest, or concrete AgentAdapter is present; the supported Claude health check also reports Judge authentication inactive. No Judge call or artifact generation was attempted.
 
 ## Objective
 

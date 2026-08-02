@@ -47,3 +47,13 @@ Verdict: `PASS_WITH_NOTES`
 
 - R1 and R2 are verified fixed. R3's function documentation and behavior are correct.
 - Follow-up finding: `JudgeDisagreement.ab_disagreement_items` retains an older field comment claiming GT-aware critical-item behavior; it must document the current uniform `>0.25` approximation and resulting under-count limitation.
+
+## Final remediation review
+
+Reviewed range: `65c40b3bf798ce9ea9db1fb2814ab59ddcde97c1..4d59301326d34f56d2dbf55b16c4cba4154ce6cd`
+
+Verdict: `PASS`
+
+- The field and test comments now correctly document the uniform threshold, unavailable criticality, and resulting critical sub-threshold under-count.
+- Diff is comment-only; behavior and repeat strategy are unchanged.
+- Claude Code (`glm-5.2`) verification: report tests `63 passed`; full suite `690 passed`; diff check passed.

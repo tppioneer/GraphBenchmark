@@ -1,0 +1,957 @@
+{
+  "bundle": {
+    "cases": [
+      {
+        "case_id": "__no_case__",
+        "paired_diff": null,
+        "pairing_note": "no scored runs",
+        "run_count": 2,
+        "runs": [
+          {
+            "ab_disagreement_items": null,
+            "agent_cost": {
+              "elapsed_ms": 180000,
+              "files_read_count": 5,
+              "graph_query_count": 7,
+              "input_tokens": 11000,
+              "output_tokens": 2000,
+              "search_query_count": 2,
+              "tool_call_count": 10
+            },
+            "answer_status": null,
+            "arbiter_used": false,
+            "capped_total": null,
+            "consensus_judges": null,
+            "consensus_mode": null,
+            "critical_cap_applied": false,
+            "critical_cap_code": null,
+            "dimension_totals": null,
+            "human_review_reasons": [],
+            "human_review_triggered": false,
+            "isolation_detail": "no agent-answer artifact (execution failed)",
+            "isolation_reason": "failed",
+            "items": [],
+            "judge_call_count": null,
+            "judge_cost_available": false,
+            "judge_total_latency_ms": null,
+            "judge_total_retries": null,
+            "policy_valid": false,
+            "policy_violation_count": 1,
+            "raw_total": null,
+            "requires_human_review": false,
+            "run_id": "iso-failed",
+            "run_mode": null,
+            "status": "isolated",
+            "tool_policy": "graph"
+          },
+          {
+            "ab_disagreement_items": null,
+            "agent_cost": null,
+            "answer_status": null,
+            "arbiter_used": false,
+            "capped_total": null,
+            "consensus_judges": null,
+            "consensus_mode": null,
+            "critical_cap_applied": false,
+            "critical_cap_code": null,
+            "dimension_totals": null,
+            "human_review_reasons": [],
+            "human_review_triggered": false,
+            "isolation_detail": "unreadable/absent: run-metadata.json, policy-result.json",
+            "isolation_reason": "missing_artifact",
+            "items": [],
+            "judge_call_count": null,
+            "judge_cost_available": false,
+            "judge_total_latency_ms": null,
+            "judge_total_retries": null,
+            "policy_valid": null,
+            "policy_violation_count": 0,
+            "raw_total": null,
+            "requires_human_review": false,
+            "run_id": "iso-missing-artifact",
+            "run_mode": null,
+            "status": "isolated",
+            "tool_policy": null
+          }
+        ]
+      },
+      {
+        "case_id": "synth-case-alpha",
+        "paired_diff": {
+          "agent": "claude-code",
+          "agent_model": "glm-5.2",
+          "case_id": "synth-case-alpha",
+          "dimension_diffs": {
+            "completeness": 12.5,
+            "core_correctness": 3.75,
+            "evidence_actionability": 3.75,
+            "reasoning_correctness": 9.5,
+            "scope_precision": 0
+          },
+          "graph_cap_applied": false,
+          "graph_raw_total": 100,
+          "graph_run_id": "caseA-graph-r1",
+          "graph_total": 100,
+          "grep_cap_applied": false,
+          "grep_raw_total": 70.5,
+          "grep_run_id": "caseA-grep-r1",
+          "grep_total": 70.5,
+          "judge_model": "glm-5.2",
+          "scoring_profile": "bug_localization_v1",
+          "total_diff": 29.5
+        },
+        "pairing_note": "paired",
+        "run_count": 5,
+        "runs": [
+          {
+            "ab_disagreement_items": 2,
+            "agent_cost": {
+              "elapsed_ms": 180000,
+              "files_read_count": 5,
+              "graph_query_count": 7,
+              "input_tokens": 11000,
+              "output_tokens": 2000,
+              "search_query_count": 2,
+              "tool_call_count": 10
+            },
+            "answer_status": "completed",
+            "arbiter_used": false,
+            "capped_total": 100,
+            "consensus_judges": 2,
+            "consensus_mode": "mean",
+            "critical_cap_applied": false,
+            "critical_cap_code": null,
+            "dimension_totals": {
+              "completeness": 20,
+              "core_correctness": 35,
+              "evidence_actionability": 10,
+              "reasoning_correctness": 25,
+              "scope_precision": 10
+            },
+            "human_review_reasons": [],
+            "human_review_triggered": false,
+            "isolation_detail": "",
+            "isolation_reason": null,
+            "items": [
+              {
+                "consensus_credit": 1,
+                "dimension": "core_correctness",
+                "item_id": "outcome.root-cause",
+                "item_score": 20,
+                "points": 20
+              },
+              {
+                "consensus_credit": 1,
+                "dimension": "core_correctness",
+                "item_id": "outcome.trigger",
+                "item_score": 15,
+                "points": 15
+              },
+              {
+                "consensus_credit": 1,
+                "dimension": "reasoning_correctness",
+                "item_id": "reasoning.chain",
+                "item_score": 12,
+                "points": 12
+              },
+              {
+                "consensus_credit": 1,
+                "dimension": "reasoning_correctness",
+                "item_id": "reasoning.propagation",
+                "item_score": 13,
+                "points": 13
+              },
+              {
+                "consensus_credit": 1,
+                "dimension": "completeness",
+                "item_id": "completeness.blast",
+                "item_score": 10,
+                "points": 10
+              },
+              {
+                "consensus_credit": 1,
+                "dimension": "completeness",
+                "item_id": "completeness.recovery",
+                "item_score": 10,
+                "points": 10
+              },
+              {
+                "consensus_credit": 1,
+                "dimension": "scope_precision",
+                "item_id": "precision.atomic",
+                "item_score": 5,
+                "points": 5
+              },
+              {
+                "consensus_credit": 1,
+                "dimension": "scope_precision",
+                "item_id": "precision.unrelated",
+                "item_score": 5,
+                "points": 5
+              },
+              {
+                "consensus_credit": 1,
+                "dimension": "evidence_actionability",
+                "item_id": "evidence.validation",
+                "item_score": 5,
+                "points": 5
+              },
+              {
+                "consensus_credit": 1,
+                "dimension": "evidence_actionability",
+                "item_id": "evidence.repro",
+                "item_score": 5,
+                "points": 5
+              }
+            ],
+            "judge_call_count": 2,
+            "judge_cost_available": true,
+            "judge_total_latency_ms": 45000,
+            "judge_total_retries": 0,
+            "policy_valid": true,
+            "policy_violation_count": 0,
+            "raw_total": 100,
+            "requires_human_review": false,
+            "run_id": "caseA-graph-r1",
+            "run_mode": "formal",
+            "status": "scored",
+            "tool_policy": "graph"
+          },
+          {
+            "ab_disagreement_items": 2,
+            "agent_cost": {
+              "elapsed_ms": 180000,
+              "files_read_count": 5,
+              "graph_query_count": 0,
+              "input_tokens": 11000,
+              "output_tokens": 2000,
+              "search_query_count": 3,
+              "tool_call_count": 10
+            },
+            "answer_status": "completed",
+            "arbiter_used": false,
+            "capped_total": 70.5,
+            "consensus_judges": 2,
+            "consensus_mode": "mean",
+            "critical_cap_applied": false,
+            "critical_cap_code": null,
+            "dimension_totals": {
+              "completeness": 7.5,
+              "core_correctness": 31.25,
+              "evidence_actionability": 6.25,
+              "reasoning_correctness": 15.5,
+              "scope_precision": 10
+            },
+            "human_review_reasons": [],
+            "human_review_triggered": false,
+            "isolation_detail": "",
+            "isolation_reason": null,
+            "items": [
+              {
+                "consensus_credit": 1,
+                "dimension": "core_correctness",
+                "item_id": "outcome.root-cause",
+                "item_score": 20,
+                "points": 20
+              },
+              {
+                "consensus_credit": 0.75,
+                "dimension": "core_correctness",
+                "item_id": "outcome.trigger",
+                "item_score": 11.25,
+                "points": 15
+              },
+              {
+                "consensus_credit": 0.75,
+                "dimension": "reasoning_correctness",
+                "item_id": "reasoning.chain",
+                "item_score": 9,
+                "points": 12
+              },
+              {
+                "consensus_credit": 0.5,
+                "dimension": "reasoning_correctness",
+                "item_id": "reasoning.propagation",
+                "item_score": 6.5,
+                "points": 13
+              },
+              {
+                "consensus_credit": 0.5,
+                "dimension": "completeness",
+                "item_id": "completeness.blast",
+                "item_score": 5,
+                "points": 10
+              },
+              {
+                "consensus_credit": 0.25,
+                "dimension": "completeness",
+                "item_id": "completeness.recovery",
+                "item_score": 2.5,
+                "points": 10
+              },
+              {
+                "consensus_credit": 1,
+                "dimension": "scope_precision",
+                "item_id": "precision.atomic",
+                "item_score": 5,
+                "points": 5
+              },
+              {
+                "consensus_credit": 1,
+                "dimension": "scope_precision",
+                "item_id": "precision.unrelated",
+                "item_score": 5,
+                "points": 5
+              },
+              {
+                "consensus_credit": 0.75,
+                "dimension": "evidence_actionability",
+                "item_id": "evidence.validation",
+                "item_score": 3.75,
+                "points": 5
+              },
+              {
+                "consensus_credit": 0.5,
+                "dimension": "evidence_actionability",
+                "item_id": "evidence.repro",
+                "item_score": 2.5,
+                "points": 5
+              }
+            ],
+            "judge_call_count": 2,
+            "judge_cost_available": true,
+            "judge_total_latency_ms": 45000,
+            "judge_total_retries": 0,
+            "policy_valid": true,
+            "policy_violation_count": 0,
+            "raw_total": 70.5,
+            "requires_human_review": false,
+            "run_id": "caseA-grep-r1",
+            "run_mode": "formal",
+            "status": "scored",
+            "tool_policy": "grep"
+          },
+          {
+            "ab_disagreement_items": null,
+            "agent_cost": {
+              "elapsed_ms": 180000,
+              "files_read_count": 5,
+              "graph_query_count": 7,
+              "input_tokens": 11000,
+              "output_tokens": 2000,
+              "search_query_count": 2,
+              "tool_call_count": 10
+            },
+            "answer_status": "completed",
+            "arbiter_used": false,
+            "capped_total": null,
+            "consensus_judges": null,
+            "consensus_mode": null,
+            "critical_cap_applied": false,
+            "critical_cap_code": null,
+            "dimension_totals": null,
+            "human_review_reasons": [],
+            "human_review_triggered": false,
+            "isolation_detail": "artifact 'effective_score' status is failed",
+            "isolation_reason": "judge_failed",
+            "items": [],
+            "judge_call_count": null,
+            "judge_cost_available": false,
+            "judge_total_latency_ms": null,
+            "judge_total_retries": null,
+            "policy_valid": true,
+            "policy_violation_count": 0,
+            "raw_total": null,
+            "requires_human_review": false,
+            "run_id": "iso-judge-failed",
+            "run_mode": null,
+            "status": "isolated",
+            "tool_policy": "graph"
+          },
+          {
+            "ab_disagreement_items": null,
+            "agent_cost": {
+              "elapsed_ms": 180000,
+              "files_read_count": 5,
+              "graph_query_count": 7,
+              "input_tokens": 11000,
+              "output_tokens": 2000,
+              "search_query_count": 2,
+              "tool_call_count": 10
+            },
+            "answer_status": "empty",
+            "arbiter_used": false,
+            "capped_total": null,
+            "consensus_judges": null,
+            "consensus_mode": null,
+            "critical_cap_applied": false,
+            "critical_cap_code": null,
+            "dimension_totals": null,
+            "human_review_reasons": [],
+            "human_review_triggered": false,
+            "isolation_detail": "answer_status='empty' (deterministic 0, not materialized)",
+            "isolation_reason": "valid_zero",
+            "items": [],
+            "judge_call_count": null,
+            "judge_cost_available": false,
+            "judge_total_latency_ms": null,
+            "judge_total_retries": null,
+            "policy_valid": true,
+            "policy_violation_count": 0,
+            "raw_total": null,
+            "requires_human_review": false,
+            "run_id": "iso-valid-zero",
+            "run_mode": null,
+            "status": "isolated",
+            "tool_policy": "graph"
+          },
+          {
+            "ab_disagreement_items": null,
+            "agent_cost": {
+              "elapsed_ms": 180000,
+              "files_read_count": 5,
+              "graph_query_count": 7,
+              "input_tokens": 11000,
+              "output_tokens": 2000,
+              "search_query_count": 2,
+              "tool_call_count": 10
+            },
+            "answer_status": "completed",
+            "arbiter_used": false,
+            "capped_total": null,
+            "consensus_judges": null,
+            "consensus_mode": null,
+            "critical_cap_applied": false,
+            "critical_cap_code": null,
+            "dimension_totals": null,
+            "human_review_reasons": [],
+            "human_review_triggered": false,
+            "isolation_detail": "judge_requested_model='glm-5.2' != judge_model='claude-sonnet-4'",
+            "isolation_reason": "version_mismatch",
+            "items": [],
+            "judge_call_count": 2,
+            "judge_cost_available": true,
+            "judge_total_latency_ms": 45000,
+            "judge_total_retries": 0,
+            "policy_valid": true,
+            "policy_violation_count": 0,
+            "raw_total": null,
+            "requires_human_review": false,
+            "run_id": "iso-version-mismatch",
+            "run_mode": null,
+            "status": "isolated",
+            "tool_policy": "graph"
+          }
+        ]
+      },
+      {
+        "case_id": "synth-case-beta",
+        "paired_diff": {
+          "agent": "claude-code",
+          "agent_model": "glm-5.2",
+          "case_id": "synth-case-beta",
+          "dimension_diffs": {
+            "completeness": 7.5,
+            "core_correctness": 17.5,
+            "evidence_actionability": 3.75,
+            "reasoning_correctness": 9.5,
+            "scope_precision": 2.5
+          },
+          "graph_cap_applied": false,
+          "graph_raw_total": 83.75,
+          "graph_run_id": "caseB-graph-r1",
+          "graph_total": 83.75,
+          "grep_cap_applied": false,
+          "grep_raw_total": 43,
+          "grep_run_id": "caseB-grep-r1",
+          "grep_total": 43,
+          "judge_model": "glm-5.2",
+          "scoring_profile": "bug_localization_v1",
+          "total_diff": 40.75
+        },
+        "pairing_note": "paired",
+        "run_count": 4,
+        "runs": [
+          {
+            "ab_disagreement_items": 2,
+            "agent_cost": {
+              "elapsed_ms": 180000,
+              "files_read_count": 5,
+              "graph_query_count": 7,
+              "input_tokens": 11000,
+              "output_tokens": 2000,
+              "search_query_count": 2,
+              "tool_call_count": 10
+            },
+            "answer_status": "completed",
+            "arbiter_used": false,
+            "capped_total": 83.75,
+            "consensus_judges": 2,
+            "consensus_mode": "mean",
+            "critical_cap_applied": false,
+            "critical_cap_code": null,
+            "dimension_totals": {
+              "completeness": 12.5,
+              "core_correctness": 35,
+              "evidence_actionability": 7.5,
+              "reasoning_correctness": 18.75,
+              "scope_precision": 10
+            },
+            "human_review_reasons": [],
+            "human_review_triggered": false,
+            "isolation_detail": "",
+            "isolation_reason": null,
+            "items": [
+              {
+                "consensus_credit": 1,
+                "dimension": "core_correctness",
+                "item_id": "outcome.root-cause",
+                "item_score": 20,
+                "points": 20
+              },
+              {
+                "consensus_credit": 1,
+                "dimension": "core_correctness",
+                "item_id": "outcome.trigger",
+                "item_score": 15,
+                "points": 15
+              },
+              {
+                "consensus_credit": 0.75,
+                "dimension": "reasoning_correctness",
+                "item_id": "reasoning.chain",
+                "item_score": 9,
+                "points": 12
+              },
+              {
+                "consensus_credit": 0.75,
+                "dimension": "reasoning_correctness",
+                "item_id": "reasoning.propagation",
+                "item_score": 9.75,
+                "points": 13
+              },
+              {
+                "consensus_credit": 0.75,
+                "dimension": "completeness",
+                "item_id": "completeness.blast",
+                "item_score": 7.5,
+                "points": 10
+              },
+              {
+                "consensus_credit": 0.5,
+                "dimension": "completeness",
+                "item_id": "completeness.recovery",
+                "item_score": 5,
+                "points": 10
+              },
+              {
+                "consensus_credit": 1,
+                "dimension": "scope_precision",
+                "item_id": "precision.atomic",
+                "item_score": 5,
+                "points": 5
+              },
+              {
+                "consensus_credit": 1,
+                "dimension": "scope_precision",
+                "item_id": "precision.unrelated",
+                "item_score": 5,
+                "points": 5
+              },
+              {
+                "consensus_credit": 0.75,
+                "dimension": "evidence_actionability",
+                "item_id": "evidence.validation",
+                "item_score": 3.75,
+                "points": 5
+              },
+              {
+                "consensus_credit": 0.75,
+                "dimension": "evidence_actionability",
+                "item_id": "evidence.repro",
+                "item_score": 3.75,
+                "points": 5
+              }
+            ],
+            "judge_call_count": 2,
+            "judge_cost_available": true,
+            "judge_total_latency_ms": 45000,
+            "judge_total_retries": 0,
+            "policy_valid": true,
+            "policy_violation_count": 0,
+            "raw_total": 83.75,
+            "requires_human_review": false,
+            "run_id": "caseB-graph-r1",
+            "run_mode": "formal",
+            "status": "scored",
+            "tool_policy": "graph"
+          },
+          {
+            "ab_disagreement_items": 2,
+            "agent_cost": {
+              "elapsed_ms": 180000,
+              "files_read_count": 5,
+              "graph_query_count": 0,
+              "input_tokens": 11000,
+              "output_tokens": 2000,
+              "search_query_count": 3,
+              "tool_call_count": 10
+            },
+            "answer_status": "completed",
+            "arbiter_used": false,
+            "capped_total": 43,
+            "consensus_judges": 2,
+            "consensus_mode": "mean",
+            "critical_cap_applied": false,
+            "critical_cap_code": null,
+            "dimension_totals": {
+              "completeness": 5,
+              "core_correctness": 17.5,
+              "evidence_actionability": 3.75,
+              "reasoning_correctness": 9.25,
+              "scope_precision": 7.5
+            },
+            "human_review_reasons": [],
+            "human_review_triggered": false,
+            "isolation_detail": "",
+            "isolation_reason": null,
+            "items": [
+              {
+                "consensus_credit": 0.5,
+                "dimension": "core_correctness",
+                "item_id": "outcome.root-cause",
+                "item_score": 10,
+                "points": 20
+              },
+              {
+                "consensus_credit": 0.5,
+                "dimension": "core_correctness",
+                "item_id": "outcome.trigger",
+                "item_score": 7.5,
+                "points": 15
+              },
+              {
+                "consensus_credit": 0.5,
+                "dimension": "reasoning_correctness",
+                "item_id": "reasoning.chain",
+                "item_score": 6,
+                "points": 12
+              },
+              {
+                "consensus_credit": 0.25,
+                "dimension": "reasoning_correctness",
+                "item_id": "reasoning.propagation",
+                "item_score": 3.25,
+                "points": 13
+              },
+              {
+                "consensus_credit": 0.25,
+                "dimension": "completeness",
+                "item_id": "completeness.blast",
+                "item_score": 2.5,
+                "points": 10
+              },
+              {
+                "consensus_credit": 0.25,
+                "dimension": "completeness",
+                "item_id": "completeness.recovery",
+                "item_score": 2.5,
+                "points": 10
+              },
+              {
+                "consensus_credit": 0.75,
+                "dimension": "scope_precision",
+                "item_id": "precision.atomic",
+                "item_score": 3.75,
+                "points": 5
+              },
+              {
+                "consensus_credit": 0.75,
+                "dimension": "scope_precision",
+                "item_id": "precision.unrelated",
+                "item_score": 3.75,
+                "points": 5
+              },
+              {
+                "consensus_credit": 0.5,
+                "dimension": "evidence_actionability",
+                "item_id": "evidence.validation",
+                "item_score": 2.5,
+                "points": 5
+              },
+              {
+                "consensus_credit": 0.25,
+                "dimension": "evidence_actionability",
+                "item_id": "evidence.repro",
+                "item_score": 1.25,
+                "points": 5
+              }
+            ],
+            "judge_call_count": 2,
+            "judge_cost_available": true,
+            "judge_total_latency_ms": 45000,
+            "judge_total_retries": 0,
+            "policy_valid": true,
+            "policy_violation_count": 0,
+            "raw_total": 43,
+            "requires_human_review": false,
+            "run_id": "caseB-grep-r1",
+            "run_mode": "formal",
+            "status": "scored",
+            "tool_policy": "grep"
+          },
+          {
+            "ab_disagreement_items": null,
+            "agent_cost": {
+              "elapsed_ms": 180000,
+              "files_read_count": 5,
+              "graph_query_count": 7,
+              "input_tokens": 11000,
+              "output_tokens": 2000,
+              "search_query_count": 2,
+              "tool_call_count": 10
+            },
+            "answer_status": "completed",
+            "arbiter_used": false,
+            "capped_total": null,
+            "consensus_judges": null,
+            "consensus_mode": null,
+            "critical_cap_applied": false,
+            "critical_cap_code": null,
+            "dimension_totals": null,
+            "human_review_reasons": [],
+            "human_review_triggered": false,
+            "isolation_detail": "answer_status='completed', no effective-score.json",
+            "isolation_reason": "awaiting_judge",
+            "items": [],
+            "judge_call_count": null,
+            "judge_cost_available": false,
+            "judge_total_latency_ms": null,
+            "judge_total_retries": null,
+            "policy_valid": true,
+            "policy_violation_count": 0,
+            "raw_total": null,
+            "requires_human_review": false,
+            "run_id": "iso-awaiting-judge",
+            "run_mode": null,
+            "status": "isolated",
+            "tool_policy": "graph"
+          },
+          {
+            "ab_disagreement_items": null,
+            "agent_cost": {
+              "elapsed_ms": 180000,
+              "files_read_count": 5,
+              "graph_query_count": 7,
+              "input_tokens": 11000,
+              "output_tokens": 2000,
+              "search_query_count": 2,
+              "tool_call_count": 10
+            },
+            "answer_status": "completed",
+            "arbiter_used": false,
+            "capped_total": null,
+            "consensus_judges": null,
+            "consensus_mode": null,
+            "critical_cap_applied": false,
+            "critical_cap_code": null,
+            "dimension_totals": null,
+            "human_review_reasons": [],
+            "human_review_triggered": false,
+            "isolation_detail": "answer_status='completed', policy_valid=False",
+            "isolation_reason": "invalid",
+            "items": [],
+            "judge_call_count": null,
+            "judge_cost_available": false,
+            "judge_total_latency_ms": null,
+            "judge_total_retries": null,
+            "policy_valid": false,
+            "policy_violation_count": 1,
+            "raw_total": null,
+            "requires_human_review": false,
+            "run_id": "iso-invalid",
+            "run_mode": null,
+            "status": "isolated",
+            "tool_policy": "graph"
+          }
+        ]
+      }
+    ],
+    "judge_call_count": 0,
+    "summary": {
+      "compatibility": {
+        "dimensions": [
+          "benchmark_version",
+          "judge_protocol",
+          "scoring_profile",
+          "judge_provider",
+          "judge_model",
+          "judge_cli_version"
+        ],
+        "groups": [
+          {
+            "benchmark_version": "n/a",
+            "isolated_run_count": 6,
+            "isolated_run_ids": [
+              "iso-awaiting-judge",
+              "iso-failed",
+              "iso-invalid",
+              "iso-judge-failed",
+              "iso-missing-artifact",
+              "iso-valid-zero"
+            ],
+            "judge_cli_version": "n/a",
+            "judge_model": "n/a",
+            "judge_protocol": "n/a",
+            "judge_provider": "n/a",
+            "key": [
+              "__isolated_no_identity__"
+            ],
+            "scored_run_count": 0,
+            "scored_run_ids": [],
+            "scoring_profile": "n/a"
+          },
+          {
+            "benchmark_version": "ai-score-v1",
+            "isolated_run_count": 1,
+            "isolated_run_ids": [
+              "iso-version-mismatch"
+            ],
+            "judge_cli_version": "2.1.220",
+            "judge_model": "claude-sonnet-4",
+            "judge_protocol": "semantic_outcome_v1",
+            "judge_provider": "claude-code-cli",
+            "key": [
+              "ai-score-v1",
+              "semantic_outcome_v1",
+              "bug_localization_v1",
+              "claude-code-cli",
+              "claude-sonnet-4",
+              "2.1.220"
+            ],
+            "scored_run_count": 0,
+            "scored_run_ids": [],
+            "scoring_profile": "bug_localization_v1"
+          },
+          {
+            "benchmark_version": "ai-score-v1",
+            "isolated_run_count": 0,
+            "isolated_run_ids": [],
+            "judge_cli_version": "2.1.220",
+            "judge_model": "glm-5.2",
+            "judge_protocol": "semantic_outcome_v1",
+            "judge_provider": "claude-code-cli",
+            "key": [
+              "ai-score-v1",
+              "semantic_outcome_v1",
+              "bug_localization_v1",
+              "claude-code-cli",
+              "glm-5.2",
+              "2.1.220"
+            ],
+            "scored_run_count": 4,
+            "scored_run_ids": [
+              "caseA-graph-r1",
+              "caseA-grep-r1",
+              "caseB-graph-r1",
+              "caseB-grep-r1"
+            ],
+            "scoring_profile": "bug_localization_v1"
+          }
+        ]
+      },
+      "cost": {
+        "agent_elapsed_ms_total": 720000,
+        "agent_files_read_count_total": 20,
+        "agent_graph_query_count_total": 14,
+        "agent_input_tokens_total": 44000,
+        "agent_output_tokens_total": 8000,
+        "agent_search_query_count_total": 10,
+        "agent_tool_call_count_total": 40,
+        "judge_call_count_total": 8,
+        "judge_cost_available_runs": 4,
+        "judge_input_tokens_total": 20000,
+        "judge_output_tokens_total": 3200,
+        "judge_total_latency_ms": 180000,
+        "judge_total_retries": 0
+      },
+      "judge_call_count": 0,
+      "mean_total_diff": 35.125,
+      "median_total_diff": 35.125,
+      "paired_absolute_diffs": [
+        {
+          "agent": "claude-code",
+          "agent_model": "glm-5.2",
+          "case_id": "synth-case-alpha",
+          "dimension_diffs": {
+            "completeness": 12.5,
+            "core_correctness": 3.75,
+            "evidence_actionability": 3.75,
+            "reasoning_correctness": 9.5,
+            "scope_precision": 0
+          },
+          "graph_cap_applied": false,
+          "graph_raw_total": 100,
+          "graph_run_id": "caseA-graph-r1",
+          "graph_total": 100,
+          "grep_cap_applied": false,
+          "grep_raw_total": 70.5,
+          "grep_run_id": "caseA-grep-r1",
+          "grep_total": 70.5,
+          "judge_model": "glm-5.2",
+          "scoring_profile": "bug_localization_v1",
+          "total_diff": 29.5
+        },
+        {
+          "agent": "claude-code",
+          "agent_model": "glm-5.2",
+          "case_id": "synth-case-beta",
+          "dimension_diffs": {
+            "completeness": 7.5,
+            "core_correctness": 17.5,
+            "evidence_actionability": 3.75,
+            "reasoning_correctness": 9.5,
+            "scope_precision": 2.5
+          },
+          "graph_cap_applied": false,
+          "graph_raw_total": 83.75,
+          "graph_run_id": "caseB-graph-r1",
+          "graph_total": 83.75,
+          "grep_cap_applied": false,
+          "grep_raw_total": 43,
+          "grep_run_id": "caseB-grep-r1",
+          "grep_total": 43,
+          "judge_model": "glm-5.2",
+          "scoring_profile": "bug_localization_v1",
+          "total_diff": 40.75
+        }
+      ],
+      "run_counts": {
+        "by_isolation_reason": {
+          "awaiting_judge": 1,
+          "failed": 1,
+          "invalid": 1,
+          "judge_failed": 1,
+          "missing_artifact": 1,
+          "valid_zero": 1,
+          "version_mismatch": 1
+        },
+        "isolated": 7,
+        "scored": 4,
+        "total": 11
+      },
+      "stability": {
+        "arbiter_used_count": 0,
+        "consensus_mode_counts": {
+          "mean": 4
+        },
+        "human_review_coverage": 0,
+        "human_review_required_count": 0,
+        "runs_with_ab_disagreement": 4,
+        "scored_run_count": 4,
+        "total_ab_disagreement_items": 8
+      }
+    }
+  },
+  "digest": "sha256:25e30277a2c8d272cb5b171d2475c32460459e9e61cc4b7cb756e8e9d34a5821"
+}

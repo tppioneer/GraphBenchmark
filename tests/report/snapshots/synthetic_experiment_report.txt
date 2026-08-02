@@ -1,0 +1,228 @@
+
+========================================================================
+SUMMARY REPORT
+========================================================================
+
+--- Correctness: paired absolute score differences (Graph - Grep) ---
+  total runs: 11 (scored=4, isolated=7)
+  paired pairs: 2
+  median total diff: 35.12
+  mean total diff: 35.12
+    synth-case-alpha: graph=100.00 grep=70.50 diff=29.50 (graph=caseA-graph-r1, grep=caseA-grep-r1)
+    synth-case-beta: graph=83.75 grep=43.00 diff=40.75 (graph=caseB-graph-r1, grep=caseB-grep-r1)
+  (no Pairwise preference is generated or displayed; §16.2)
+
+--- Compliance: run status & version compatibility ---
+  scored: 4
+  version_mismatch: 1 (isolated, excluded from aggregation)
+  judge_failed: 1 (isolated, no inferred score)
+  awaiting_judge: 1
+  valid_zero: 1 (deterministic 0, not materialized)
+  invalid: 1
+  failed: 1
+  missing_artifact: 1
+
+  Compatibility matrix:
+  dimensions: ['benchmark_version', 'judge_protocol', 'scoring_profile', 'judge_provider', 'judge_model', 'judge_cli_version']
+    [n/a | judge=n/a | cli=n/a] scored=0 isolated=6
+      isolated: ['iso-awaiting-judge', 'iso-failed', 'iso-invalid', 'iso-judge-failed', 'iso-missing-artifact', 'iso-valid-zero']
+    [bug_localization_v1 | judge=claude-sonnet-4 | cli=2.1.220] scored=0 isolated=1
+      isolated: ['iso-version-mismatch']
+    [bug_localization_v1 | judge=glm-5.2 | cli=2.1.220] scored=4 isolated=0
+      scored: ['caseA-graph-r1', 'caseA-grep-r1', 'caseB-graph-r1', 'caseB-grep-r1']
+
+--- Stability: Judge consensus & review coverage ---
+  scored runs with consensus data: 4
+  arbiter (Judge C) used: 0
+  human review required: 0
+  human review coverage: 0.00
+  consensus modes: {'mean': 4}
+  total A/B disagreement items: 8
+  runs with A/B disagreement: 4
+
+--- Cost: independent metrics (never folded into correctness) ---
+  agent elapsed_ms (sum): 720000
+  agent input_tokens (sum): 44000
+  agent output_tokens (sum): 8000
+  agent tool_call_count (sum): 40
+  agent files_read (sum): 20
+  agent graph_query (sum): 14
+  agent search_query (sum): 10
+  judge cost available runs: 4
+  judge call_count (sum): 8
+  judge latency_ms (sum): 180000
+  judge retries (sum): 0
+  judge input_tokens (sum): 20000
+  judge output_tokens (sum): 3200
+
+  Judge call count (this report): 0
+  (a complete score is never invalidated by high cost; §15.2)
+
+
+========================================================================
+CASE: __no_case__
+========================================================================
+
+runs: 2 | pairing: no scored runs
+
+  run: iso-failed | policy=graph | status=isolated (failed)
+    isolation: no agent-answer artifact (execution failed)
+    compliance: policy_valid=False violations=1 answer_status=None
+    cost (agent): elapsed_ms=180000 tokens=11000+2000 tools=10 files=5 graph_q=7 search_q=2
+
+  run: iso-missing-artifact | policy=? | status=isolated (missing_artifact)
+    isolation: unreadable/absent: run-metadata.json, policy-result.json
+    compliance: policy_valid=None violations=0 answer_status=None
+
+
+========================================================================
+CASE: synth-case-alpha
+========================================================================
+
+runs: 5 | pairing: paired
+
+--- Paired absolute score difference (Graph - Grep) ---
+  graph run: caseA-graph-r1 (total=100.00)
+  grep  run: caseA-grep-r1 (total=70.50)
+  total diff: 29.50
+  dimension diffs:
+    core_correctness: 3.75
+    reasoning_correctness: 9.50
+    completeness: 12.50
+    scope_precision: 0.00
+    evidence_actionability: 3.75
+
+  run: caseA-graph-r1 | policy=graph | status=scored
+    correctness: capped_total=100.00 raw_total=100.00
+    dimensions: core_correctness=35.00, reasoning_correctness=25.00, completeness=20.00, scope_precision=10.00, evidence_actionability=10.00
+    items (10):
+      outcome.root-cause [core_correctness] credit=1.00 points=20.00 score=20.00
+      outcome.trigger [core_correctness] credit=1.00 points=15.00 score=15.00
+      reasoning.chain [reasoning_correctness] credit=1.00 points=12.00 score=12.00
+      reasoning.propagation [reasoning_correctness] credit=1.00 points=13.00 score=13.00
+      completeness.blast [completeness] credit=1.00 points=10.00 score=10.00
+      completeness.recovery [completeness] credit=1.00 points=10.00 score=10.00
+      precision.atomic [scope_precision] credit=1.00 points=5.00 score=5.00
+      precision.unrelated [scope_precision] credit=1.00 points=5.00 score=5.00
+      evidence.validation [evidence_actionability] credit=1.00 points=5.00 score=5.00
+      evidence.repro [evidence_actionability] credit=1.00 points=5.00 score=5.00
+    consensus: mode=mean judges=2 arbiter=False review_triggered=False
+    A/B disagreement items: 2
+    run_mode: formal
+    compliance: policy_valid=True violations=0 answer_status=completed
+    cost (agent): elapsed_ms=180000 tokens=11000+2000 tools=10 files=5 graph_q=7 search_q=2
+    cost (judge): calls=2 latency_ms=45000 retries=0
+
+  run: caseA-grep-r1 | policy=grep | status=scored
+    correctness: capped_total=70.50 raw_total=70.50
+    dimensions: core_correctness=31.25, reasoning_correctness=15.50, completeness=7.50, scope_precision=10.00, evidence_actionability=6.25
+    items (10):
+      outcome.root-cause [core_correctness] credit=1.00 points=20.00 score=20.00
+      outcome.trigger [core_correctness] credit=0.75 points=15.00 score=11.25
+      reasoning.chain [reasoning_correctness] credit=0.75 points=12.00 score=9.00
+      reasoning.propagation [reasoning_correctness] credit=0.50 points=13.00 score=6.50
+      completeness.blast [completeness] credit=0.50 points=10.00 score=5.00
+      completeness.recovery [completeness] credit=0.25 points=10.00 score=2.50
+      precision.atomic [scope_precision] credit=1.00 points=5.00 score=5.00
+      precision.unrelated [scope_precision] credit=1.00 points=5.00 score=5.00
+      evidence.validation [evidence_actionability] credit=0.75 points=5.00 score=3.75
+      evidence.repro [evidence_actionability] credit=0.50 points=5.00 score=2.50
+    consensus: mode=mean judges=2 arbiter=False review_triggered=False
+    A/B disagreement items: 2
+    run_mode: formal
+    compliance: policy_valid=True violations=0 answer_status=completed
+    cost (agent): elapsed_ms=180000 tokens=11000+2000 tools=10 files=5 graph_q=0 search_q=3
+    cost (judge): calls=2 latency_ms=45000 retries=0
+
+  run: iso-judge-failed | policy=graph | status=isolated (judge_failed)
+    isolation: artifact 'effective_score' status is failed
+    compliance: policy_valid=True violations=0 answer_status=completed
+    cost (agent): elapsed_ms=180000 tokens=11000+2000 tools=10 files=5 graph_q=7 search_q=2
+
+  run: iso-valid-zero | policy=graph | status=isolated (valid_zero)
+    isolation: answer_status='empty' (deterministic 0, not materialized)
+    compliance: policy_valid=True violations=0 answer_status=empty
+    cost (agent): elapsed_ms=180000 tokens=11000+2000 tools=10 files=5 graph_q=7 search_q=2
+
+  run: iso-version-mismatch | policy=graph | status=isolated (version_mismatch)
+    isolation: judge_requested_model='glm-5.2' != judge_model='claude-sonnet-4'
+    compliance: policy_valid=True violations=0 answer_status=completed
+    cost (agent): elapsed_ms=180000 tokens=11000+2000 tools=10 files=5 graph_q=7 search_q=2
+    cost (judge): calls=2 latency_ms=45000 retries=0
+
+
+========================================================================
+CASE: synth-case-beta
+========================================================================
+
+runs: 4 | pairing: paired
+
+--- Paired absolute score difference (Graph - Grep) ---
+  graph run: caseB-graph-r1 (total=83.75)
+  grep  run: caseB-grep-r1 (total=43.00)
+  total diff: 40.75
+  dimension diffs:
+    core_correctness: 17.50
+    reasoning_correctness: 9.50
+    completeness: 7.50
+    scope_precision: 2.50
+    evidence_actionability: 3.75
+
+  run: caseB-graph-r1 | policy=graph | status=scored
+    correctness: capped_total=83.75 raw_total=83.75
+    dimensions: core_correctness=35.00, reasoning_correctness=18.75, completeness=12.50, scope_precision=10.00, evidence_actionability=7.50
+    items (10):
+      outcome.root-cause [core_correctness] credit=1.00 points=20.00 score=20.00
+      outcome.trigger [core_correctness] credit=1.00 points=15.00 score=15.00
+      reasoning.chain [reasoning_correctness] credit=0.75 points=12.00 score=9.00
+      reasoning.propagation [reasoning_correctness] credit=0.75 points=13.00 score=9.75
+      completeness.blast [completeness] credit=0.75 points=10.00 score=7.50
+      completeness.recovery [completeness] credit=0.50 points=10.00 score=5.00
+      precision.atomic [scope_precision] credit=1.00 points=5.00 score=5.00
+      precision.unrelated [scope_precision] credit=1.00 points=5.00 score=5.00
+      evidence.validation [evidence_actionability] credit=0.75 points=5.00 score=3.75
+      evidence.repro [evidence_actionability] credit=0.75 points=5.00 score=3.75
+    consensus: mode=mean judges=2 arbiter=False review_triggered=False
+    A/B disagreement items: 2
+    run_mode: formal
+    compliance: policy_valid=True violations=0 answer_status=completed
+    cost (agent): elapsed_ms=180000 tokens=11000+2000 tools=10 files=5 graph_q=7 search_q=2
+    cost (judge): calls=2 latency_ms=45000 retries=0
+
+  run: caseB-grep-r1 | policy=grep | status=scored
+    correctness: capped_total=43.00 raw_total=43.00
+    dimensions: core_correctness=17.50, reasoning_correctness=9.25, completeness=5.00, scope_precision=7.50, evidence_actionability=3.75
+    items (10):
+      outcome.root-cause [core_correctness] credit=0.50 points=20.00 score=10.00
+      outcome.trigger [core_correctness] credit=0.50 points=15.00 score=7.50
+      reasoning.chain [reasoning_correctness] credit=0.50 points=12.00 score=6.00
+      reasoning.propagation [reasoning_correctness] credit=0.25 points=13.00 score=3.25
+      completeness.blast [completeness] credit=0.25 points=10.00 score=2.50
+      completeness.recovery [completeness] credit=0.25 points=10.00 score=2.50
+      precision.atomic [scope_precision] credit=0.75 points=5.00 score=3.75
+      precision.unrelated [scope_precision] credit=0.75 points=5.00 score=3.75
+      evidence.validation [evidence_actionability] credit=0.50 points=5.00 score=2.50
+      evidence.repro [evidence_actionability] credit=0.25 points=5.00 score=1.25
+    consensus: mode=mean judges=2 arbiter=False review_triggered=False
+    A/B disagreement items: 2
+    run_mode: formal
+    compliance: policy_valid=True violations=0 answer_status=completed
+    cost (agent): elapsed_ms=180000 tokens=11000+2000 tools=10 files=5 graph_q=0 search_q=3
+    cost (judge): calls=2 latency_ms=45000 retries=0
+
+  run: iso-awaiting-judge | policy=graph | status=isolated (awaiting_judge)
+    isolation: answer_status='completed', no effective-score.json
+    compliance: policy_valid=True violations=0 answer_status=completed
+    cost (agent): elapsed_ms=180000 tokens=11000+2000 tools=10 files=5 graph_q=7 search_q=2
+
+  run: iso-invalid | policy=graph | status=isolated (invalid)
+    isolation: answer_status='completed', policy_valid=False
+    compliance: policy_valid=False violations=1 answer_status=completed
+    cost (agent): elapsed_ms=180000 tokens=11000+2000 tools=10 files=5 graph_q=7 search_q=2
+
+
+========================================================================
+END OF REPORT
+========================================================================
+
+Judge call count: 0

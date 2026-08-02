@@ -57,3 +57,9 @@ Verdict: `PASS`
 - The field and test comments now correctly document the uniform threshold, unavailable criticality, and resulting critical sub-threshold under-count.
 - Diff is comment-only; behavior and repeat strategy are unchanged.
 - Claude Code (`glm-5.2`) verification: report tests `63 passed`; full suite `690 passed`; diff check passed.
+
+## Integration verification
+
+- Integrated commits: `9c1defd`, `072ee40`, `624b52f`.
+- Integration completed without conflicts after verified independent review.
+- Final status: `INTEGRATED`.

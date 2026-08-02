@@ -1,6 +1,6 @@
 # AIS-011: 生成 absolute、paired、稳定性与成本报告
 
-State: VERIFIED
+State: INTEGRATED
 
 ## Execution result
 
@@ -17,6 +17,7 @@ State: VERIFIED
 - Follow-up review note accepted: align the `JudgeDisagreement.ab_disagreement_items` field comment with its uniform-threshold implementation and critical-item under-count limitation.
 - Final narrow remediation: `4d59301326d34f56d2dbf55b16c4cba4154ce6cd`; report tests `63 passed`, full suite `690 passed`, Ruff and diff check passed.
 - Final independent review: Claude Code (`glm-5.2`) returned `PASS`; report tests `63 passed`, full suite `690 passed`, and diff check passed.
+- Integration: commits `9c1defd`, `072ee40`, and `624b52f` were applied to `ai-score-v1` without conflicts.
 
 ## Objective
 

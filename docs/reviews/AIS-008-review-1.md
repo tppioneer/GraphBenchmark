@@ -61,3 +61,9 @@ Verdict: `PASS`
 - N2 now retains Judge C, all three audits, and arbiter state for model-consistency failure paths without producing a formal score.
 - N3 now tests the end-to-end provider call path for an unverifiable effective model when `--model` is unavailable.
 - Claude Code (`glm-5.2`) verification: Judge tests `207 passed`; full suite `627 passed`; targeted N2/N3 tests `3 passed`; diff check passed.
+
+## Integration verification
+
+- Integrated commits: `2f39004`, `c980ff0`, `323c3f5`.
+- Integration completed without conflicts after verified independent review.
+- Final status: `INTEGRATED`.

@@ -1,6 +1,6 @@
 # AIS-008: 集成 Claude Code CLI Judge、提示和条件仲裁
 
-State: VERIFIED
+State: INTEGRATED
 
 ## Execution result
 
@@ -14,6 +14,7 @@ State: VERIFIED
 - Review findings R1--R3 are accepted for a narrow remediation pass: mark unverifiable effective models instead of claiming the requested model, redact complete JWTs, and reject formal runs whose requested/effective models differ or cannot be verified.
 - Follow-up remediation: `4d37058ef1d4901069623d64e356140cf48413f3` resolves retained Judge C audit state and an end-to-end unverifiable-model regression test; Judge tests `207 passed`, full suite `627 passed`.
 - Final independent review: Claude Code (`glm-5.2`) returned `PASS`; Judge tests `207 passed`, full suite `627 passed`, targeted N2/N3 tests `3 passed`, and diff check passed.
+- Integration: commits `2f39004`, `c980ff0`, and `323c3f5` were applied to `ai-score-v1` without conflicts.
 
 ## Objective
 

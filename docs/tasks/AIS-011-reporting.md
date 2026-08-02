@@ -1,6 +1,6 @@
 # AIS-011: 生成 absolute、paired、稳定性与成本报告
 
-State: READY_FOR_REVIEW
+State: CHANGES_REQUIRED
 
 ## Execution result
 
@@ -8,6 +8,11 @@ State: READY_FOR_REVIEW
 - Head: `3334d85d37c9a02e79c7830699298ba0f80197f4`
 - Reported checks: report tests `57 passed`; full suite `684 passed`; Ruff and diff check passed.
 - Review focus: repeat is absent from v1 artifacts, so multiple compatible candidates are reported as ambiguous rather than automatically paired; assess whether this is a compliant isolation or a protocol blocker.
+
+## Accepted remediation
+
+- Resolve R1--R3: keep paired aggregates inside compatibility groups, isolate malformed score-v1 artifacts rather than aborting report generation, and correct the reporting-only A/B disagreement documentation plus regression coverage.
+- Protocol note: v1 artifacts do not carry `repeat`; the reviewer confirmed this is not a code blocker by itself, but a later decision is needed on the formal policy for repeat-unverifiable candidate sets.
 
 ## Objective
 

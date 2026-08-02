@@ -26,7 +26,7 @@
 | `AIS-005` | 确定性计算 item、维度、总分和 cap | INTEGRATED | AIS-004 |
 | `AIS-006` | 形成多 Judge 共识和人工复核有效分 | INTEGRATED | AIS-005 |
 | `AIS-007` | 生成盲评输入、digest 与缓存键 | INTEGRATED | AIS-002 |
-| `AIS-008` | 集成 Claude Code CLI Judge、提示和仲裁调用 | READY_FOR_REVIEW | AIS-006, AIS-007 |
+| `AIS-008` | 集成 Claude Code CLI Judge、提示和仲裁调用 | VERIFIED | AIS-006, AIS-007 |
 | `AIS-009` | 运行 Agent 并独立采集策略/成本指标 | INTEGRATED | AIS-003, AIS-004 |
 | `AIS-010` | 可选建立三个 Profile 的人工校准诊断 | DRAFT | AIS-006, AIS-008 |
 | `AIS-011` | 生成 absolute、paired 和成本报告 | DRAFT | AIS-006, AIS-009 |

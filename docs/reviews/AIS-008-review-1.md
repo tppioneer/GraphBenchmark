@@ -51,3 +51,13 @@ Verdict: `PASS_WITH_NOTES`
 - R1, R2, and R3 are verified fixed; Judge tests `204 passed`, full suite `624 passed`, and diff check passed.
 - N2 is accepted for follow-up: when Judge C itself causes a model-consistency rejection, its audit record must still be retained, per design §13.4 and §13.5.
 - N3 is accepted for follow-up: add an end-to-end provider-call regression test so an effective-model overwrite cannot silently return.
+
+## Final remediation review
+
+Reviewed range: `cffa8473494bdad1e2c19da8858ce53482dd506e..4d37058ef1d4901069623d64e356140cf48413f3`
+
+Verdict: `PASS`
+
+- N2 now retains Judge C, all three audits, and arbiter state for model-consistency failure paths without producing a formal score.
+- N3 now tests the end-to-end provider call path for an unverifiable effective model when `--model` is unavailable.
+- Claude Code (`glm-5.2`) verification: Judge tests `207 passed`; full suite `627 passed`; targeted N2/N3 tests `3 passed`; diff check passed.

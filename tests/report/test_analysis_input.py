@@ -102,7 +102,8 @@ class TestScoredRunLoading:
         rec = load_run(scored_run)
         assert rec.judge_disagreement is not None
         assert rec.judge_disagreement.available_judge_outputs == 2
-        # _JUDGE_A_CREDITS vs _JUDGE_B_CREDITS differ on items 2 and 7 (0.25 gap).
+        # _JUDGE_A_CREDITS vs _JUDGE_B_CREDITS differ by 0.5 on items 2 and 7
+        # (>0.25 uniform threshold, §13.1 step 3).
         assert rec.judge_disagreement.ab_disagreement_items == 2
 
     def test_agent_cost_loaded(self, scored_run: Path) -> None:

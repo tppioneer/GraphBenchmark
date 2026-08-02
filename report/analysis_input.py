@@ -299,9 +299,15 @@ class JudgeDisagreement:
     judges: int
     arbiter_used: bool
     human_review_triggered: bool
-    #: Number of rubric items where Judge A and Judge B disagreed (any
-    #: difference on a critical item, or a >0.25 gap on a non-critical item,
-    #: per §13.1 steps 2--3). None when individual judge outputs are
+    #: Number of rubric items where Judge A and Judge B disagreed, counted with
+    #: a uniform |credit_A - credit_B| > 0.25 rule (§13.1 step 3). The full
+    #: §13.1 trigger is GT-aware (any non-zero difference on a critical item,
+    #: >0.25 on a non-critical item), but criticality is not recoverable from
+    #: the judge output alone (the GT carries the critical flag), so the uniform
+    #: threshold is applied to all items. This can under-count: a critical item
+    #: with a non-zero but sub-threshold (<=0.25) A/B difference is not flagged
+    #: here, though the GT-aware trigger would flag it (see
+    #: :func:`_count_ab_disagreement`). None when individual judge outputs are
     #: unavailable (e.g. single-judge development mode or missing artifacts).
     ab_disagreement_items: int | None
     #: The number of judges whose per-item verdicts were available.

@@ -38,3 +38,12 @@ The v1 artifact set has no `repeat` field. This is not a code blocker if ambiguo
 Base remediation on `3334d85d37c9a02e79c7830699298ba0f80197f4`.
 
 Resolve: R1, R2, R3 only. Do not change the repeat strategy without an explicit controller decision. Add focused tests; run report tests, full tests, and diff check.
+
+## Remediation review
+
+Reviewed range: `3334d85d37c9a02e79c7830699298ba0f80197f4..65c40b3bf798ce9ea9db1fb2814ab59ddcde97c1`
+
+Verdict: `PASS_WITH_NOTES`
+
+- R1 and R2 are verified fixed. R3's function documentation and behavior are correct.
+- Follow-up finding: `JudgeDisagreement.ab_disagreement_items` retains an older field comment claiming GT-aware critical-item behavior; it must document the current uniform `>0.25` approximation and resulting under-count limitation.

@@ -1,6 +1,13 @@
 # AIS-012: 端到端冻结并执行正式实验
 
-State: DRAFT
+State: IMPLEMENTING
+
+## Execution
+
+- Executor: Claude Code (`glm-5.2`, automatic permission mode)
+- Fixed base: `23731d7424a776a55c2ccaf152820d3e3ee4fdcc`
+- Isolated worktree: `F:\develop\codes\GraphBenchmark-ai-score-v1-worktrees\ais-012-e2e-release`
+- Dispatch mode: preflight first; formal Judge execution is permitted only after all frozen-input and credential-availability gates pass.
 
 ## Objective
 

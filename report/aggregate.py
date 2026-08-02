@@ -7,7 +7,9 @@ into the four report views required by AIS-011:
 * **Correctness** -- per-case outcome totals, five dimensions, critical cap,
   item verdicts, consensus/arbiter and human-review state; cross-case paired
   *absolute* score differences (Graph minus Grep) for runs sharing the same
-  case / model / agent / protocol / Profile / Judge (§16.1).
+  compatibility key (benchmark version, Judge protocol, scoring profile,
+  Judge provider/model/CLI version) as well as case and agent identity
+  (§16.1, §20).
 * **Compliance** -- artifact validity, policy-compliance verdicts and the
   version-compatibility matrix (§20).
 * **Stability** -- Judge consensus modes, arbiter usage, A/B disagreement
@@ -258,16 +260,25 @@ class PairedScoreDiff:
 
 
 def _pairing_key(rec: RunRecord) -> tuple[str, ...]:
-    """The within-group pairing key: (case_id, agent, agent_model).
+    """The within-group pairing key: compatibility dimensions + (case, agent).
 
-    Runs sharing this key within one compatibility group are candidates for
-    Graph/Grep pairing across ``tool_policy`` (§16.1). The ``repeat``
-    dimension is not yet carried by any v1 artifact, so it is not included;
-    when multiple candidates exist for the same policy the earliest run id
-    is paired deterministically.
+    Runs may be paired only when they share the *full* §20 compatibility key
+    (benchmark version, Judge protocol, scoring profile, Judge provider, Judge
+    model, CLI version) as well as case and agent identity (§16.1). This
+    prevents a paired absolute aggregate from crossing any available
+    compatibility dimension (R1): two same-case runs judged by different Judge
+    models -- or differing on any other compatibility dimension -- never enter
+    the same formal paired aggregate.
+
+    The ``repeat`` dimension is not yet carried by any v1 artifact, so it is
+    not included; when multiple candidates exist for the same policy the
+    earliest run id is paired deterministically.
     """
+    ident = rec.version_identity
+    assert ident is not None  # scored runs always carry a version identity
     return (
-        rec.case_id or "",
+        *compatibility_key(ident),
+        ident.case_id,
         rec.agent or "",
         rec.agent_model or "",
     )

@@ -17,6 +17,9 @@ Frozen invariants enforced here (AIS-011 task card):
 * A formal score (``effective-score.json``, ``score-v1``) whose requested and
   effective Judge models disagree is flagged ``version_mismatch`` and excluded
   from every formal aggregate (§13.3, §20, acceptance criterion).
+* A ``score-v1``-tagged effective-score artifact with malformed or missing
+  fields is isolated as ``invalid`` with a stable detail, rather than raising
+  and aborting ``load_runs`` / report generation.
 * ``judge_failed`` runs (manifest status ``failed`` for ``judge_score`` /
   ``effective_score``) are isolated with their failure reason; no formal score
   is generated or inferred (§13.5).
@@ -472,10 +475,14 @@ def _count_ab_disagreement(
     item counts as disagreement on any A/B credit difference; a non-critical
     item counts when |credit_A - credit_B| > 0.25 (§13.1). Whether an item is
     critical is not recoverable from the judge output alone (the GT carries the
-    critical flag), so the conservative §13.1 step-3 threshold (>0.25) is
-    applied to all items; this over-counts relative to the full GT-aware
-    trigger only when a critical item has a sub-threshold difference, which is
-    acceptable for a reporting-only indicator.
+    critical flag), so the uniform §13.1 step-3 threshold (>0.25) is applied to
+    all items. This **under-counts** relative to the full GT-aware trigger:
+    whenever a critical item has a non-zero but sub-threshold (<=0.25) A/B
+    difference, the GT-aware trigger (any difference on a critical item) would
+    flag it as disagreement, but the uniform >0.25 rule does not. The
+    under-count is one-directional -- the uniform rule never flags an item the
+    GT-aware trigger would skip -- so it is acceptable for a reporting-only
+    indicator.
     """
     if len(judge_outputs) < 2:
         return None
@@ -650,19 +657,50 @@ def load_run(run_dir: Path) -> RunRecord:
         effective_score is not None
         and effective_score.get("schema_version") == SCORE_SCHEMA_VERSION
     ):
-        identity = VersionIdentity.from_score(effective_score)
-        if not identity.models_agree:
-            detail = (
-                f"judge_requested_model={identity.judge_requested_model!r} != "
-                f"judge_model={identity.judge_model!r}"
-            )
+        # A score-v1-tagged artifact with malformed/missing fields is isolated
+        # as ``invalid`` with a stable detail rather than raising and aborting
+        # ``load_runs`` / report generation (R2). The shape exceptions a
+        # malformed document can trigger (missing key, wrong type, bad Decimal
+        # coercion, non-mapping nested block) are all caught here.
+        try:
+            identity = VersionIdentity.from_score(effective_score)
+            if not identity.models_agree:
+                detail = (
+                    f"judge_requested_model={identity.judge_requested_model!r} != "
+                    f"judge_model={identity.judge_model!r}"
+                )
+                return RunRecord(
+                    run_id=run_id,
+                    run_dir=run_dir,
+                    status=RunReportStatus.ISOLATED,
+                    isolation_reason=ISOLATION_VERSION_MISMATCH,
+                    isolation_detail=detail,
+                    version_identity=identity,
+                    score=None,
+                    judge_disagreement=None,
+                    agent=agent,
+                    agent_model=agent_model,
+                    tool_policy=tool_policy,
+                    cost=cost,
+                    policy_valid=policy_valid,
+                    policy_violation_count=policy_violation_count,
+                    answer_status=answer_status,
+                    answer_case_id=answer_case_id,
+                    artifact_status=artifact_status,
+                    raw_score=effective_score,
+                )
+
+            judge_outputs = [j for j in (judge_a, judge_b, judge_c) if j is not None]
+            score_view = _build_score_view(effective_score)
+            disagreement = _build_judge_disagreement(effective_score, judge_outputs)
+        except (KeyError, TypeError, ValueError, ArithmeticError, AttributeError) as exc:
             return RunRecord(
                 run_id=run_id,
                 run_dir=run_dir,
                 status=RunReportStatus.ISOLATED,
-                isolation_reason=ISOLATION_VERSION_MISMATCH,
-                isolation_detail=detail,
-                version_identity=identity,
+                isolation_reason=ISOLATION_INVALID,
+                isolation_detail=f"malformed score-v1 effective-score artifact: {exc}",
+                version_identity=None,
                 score=None,
                 judge_disagreement=None,
                 agent=agent,
@@ -676,10 +714,6 @@ def load_run(run_dir: Path) -> RunRecord:
                 artifact_status=artifact_status,
                 raw_score=effective_score,
             )
-
-        judge_outputs = [j for j in (judge_a, judge_b, judge_c) if j is not None]
-        score_view = _build_score_view(effective_score)
-        disagreement = _build_judge_disagreement(effective_score, judge_outputs)
         return RunRecord(
             run_id=run_id,
             run_dir=run_dir,

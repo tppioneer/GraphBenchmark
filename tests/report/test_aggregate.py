@@ -10,6 +10,7 @@ AIS-011 acceptance-criteria mapping:
 20  incompatible versions not mixed            test_incompatible_versions_separate_groups
 13.5 judge_failed listed, no inferred score    test_judge_failed_excluded_from_aggregation
 20  version_mismatch excluded                  test_version_mismatch_excluded
+20  paired diffs respect compat dims           test_same_case_different_judge_model_not_paired
 15.2 cost independent of correctness           test_cost_separate_from_correctness
 19  summary has status counts                  test_summary_run_counts
 13  stability: arbiter / review coverage       test_stability_summary
@@ -100,6 +101,60 @@ class TestPairedDiff:
         b = aggregate(records)
         assert len(b.cases) == 1
         assert "missing grep" in b.cases[0].pairing_note
+
+
+class TestPairingCompatibility:
+    """Paired absolute aggregates never cross a compatibility dimension (R1, §20)."""
+
+    def test_same_case_different_judge_model_not_paired(self, tmp_path: Path) -> None:
+        """Same-case graph/grep runs with different Judge models are never paired
+        into a formal paired aggregate (R1).
+
+        The two runs share case, agent and agent-model but differ on the Judge
+        model compatibility dimension, so they must land in separate
+        compatibility groups and produce no paired diff.
+        """
+        runs = tmp_path / "runs"
+        fx.build_scored_run(
+            runs / "graph-mA",
+            run_id="graph-mA",
+            case_id=fx.CASE_A,
+            tool_policy="graph",
+            credits=fx._CREDITS_GRAPH_A,
+            answer_digest=fx.DIGEST_ANSWER_GRAPH_A,
+            judge_model="glm-5.2",
+            judge_requested_model="glm-5.2",
+        )
+        fx.build_scored_run(
+            runs / "grep-mB",
+            run_id="grep-mB",
+            case_id=fx.CASE_A,
+            tool_policy="grep",
+            credits=fx._CREDITS_GREP_A,
+            answer_digest=fx.DIGEST_ANSWER_GREP_A,
+            judge_model="claude-sonnet-4",
+            judge_requested_model="claude-sonnet-4",
+        )
+        records = load_runs(runs)
+        bundle = aggregate(records)
+
+        # No pair enters the formal paired aggregate.
+        assert bundle.summary.paired_diffs == ()
+        assert bundle.summary.median_total_diff is None
+        assert bundle.summary.mean_total_diff is None
+
+        # The case report lists both runs but has no paired diff.
+        case = bundle.cases[0]
+        assert case.case_id == fx.CASE_A
+        assert case.paired_diff is None
+        assert "missing" in case.pairing_note
+
+        # The two runs land in separate scored compatibility groups.
+        matrix = bundle.summary.compatibility
+        scored_groups = [g for g in matrix.groups if g.scored_run_ids]
+        assert len(scored_groups) == 2
+        judge_models = {g.judge_model for g in scored_groups}
+        assert judge_models == {"glm-5.2", "claude-sonnet-4"}
 
 
 class TestVersionIsolation:

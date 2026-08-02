@@ -1,6 +1,6 @@
 # AIS-011: 生成 absolute、paired、稳定性与成本报告
 
-State: CHANGES_REQUIRED
+State: READY_FOR_REVIEW
 
 ## Execution result
 
@@ -15,6 +15,7 @@ State: CHANGES_REQUIRED
 - Protocol note: v1 artifacts do not carry `repeat`; the reviewer confirmed this is not a code blocker by itself, but a later decision is needed on the formal policy for repeat-unverifiable candidate sets.
 - Remediation: `65c40b3bf798ce9ea9db1fb2814ab59ddcde97c1` resolves R1--R3; report tests `63 passed`, full suite `690 passed`, Ruff and diff check passed.
 - Follow-up review note accepted: align the `JudgeDisagreement.ab_disagreement_items` field comment with its uniform-threshold implementation and critical-item under-count limitation.
+- Final narrow remediation: `4d59301326d34f56d2dbf55b16c4cba4154ce6cd`; report tests `63 passed`, full suite `690 passed`, Ruff and diff check passed.
 
 ## Objective
 

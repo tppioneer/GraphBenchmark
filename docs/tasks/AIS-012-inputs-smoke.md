@@ -1,6 +1,6 @@
 # AIS-012 input conversion and smoke configuration
 
-State: IMPLEMENTING
+State: READY_FOR_REVIEW
 
 ## Objective
 
@@ -37,3 +37,9 @@ Convert the user-approved QwenPaw corrupt-inbox case and its reviewed legacy gro
 
 - One scoped commit with the three configuration files and any focused tests needed for their validation.
 - Strict `AGENT_RESULT` including source-to-rubric mapping, validation evidence, and unresolved execution gates.
+
+## Execution result
+
+- Executor result: `READY_FOR_REVIEW` at `3367ac9f99f4b8664563b035b4c6cb2a5140f8bb` (base `e2d2d7fb806fb936567853f76b1946df19ddf77c`).
+- Validation: focused input suite 16 passed; full suite 706 passed; Ruff and `git diff --check` passed.
+- Boundaries preserved: no Judge call, AgentAdapter, score, run artifact, credential access, or formal-release claim was produced.

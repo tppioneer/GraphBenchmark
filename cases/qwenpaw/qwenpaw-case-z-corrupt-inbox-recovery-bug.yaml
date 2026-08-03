@@ -1,0 +1,16 @@
+# Benchmark case (case-v1).
+#
+# Converted from the approved source case at
+#   GitNexus/docs/benchmark/v2/qwenpaw/cases/qwenpaw-case-z-corrupt-inbox-recovery-bug.yaml
+# This file carries ONLY the source-derived question shown to the agent. It does
+# NOT contain the ground-truth rubric, agent identity, tool policy, or the
+# human-review hint (`extra_desc`) from the source, which must never enter the
+# agent payload. The optional `repo` object is omitted because the source case
+# does not provide a verified repository URL/revision; none is invented.
+schema_version: case-v1
+case_id: qwenpaw-case-z-corrupt-inbox-recovery-bug
+task_type: bug_localization
+question: |
+  回归现象：从旧版本迁移来的 `inbox_events.json` 尾部不完整。此后 Web Console 查询 inbox 返回 500，定时任务和 heartbeat 虽然执行完成，也无法追加新的 inbox 结果。
+  请定位读写两条路径共享的失败点，说明故障如何从一个坏文件扩散到查询和新增事件，并给出不会破坏已有有效事件的恢复与回归测试建议。
+  不要修改代码，只输出根因、证据、影响和验证建议。

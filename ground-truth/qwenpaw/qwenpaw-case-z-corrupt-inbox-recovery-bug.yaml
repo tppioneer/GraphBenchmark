@@ -1,0 +1,146 @@
+# Ground-truth rubric (ground-truth-v1, bug_localization_v1).
+#
+# Converted from the approved source ground truth at
+#   GitNexus/docs/benchmark/v2/qwenpaw/ground-truth/qwenpaw-case-z-corrupt-inbox-recovery-bug-ground-truth.yaml
+# Every rubric item is translated from approved source material only; no
+# factual claim is added beyond the source. Source line numbers are not
+# provided by the source, so `references` carry only symbol + file (the schema
+# makes `lines` optional) rather than invented ranges.
+#
+# Dimension point sums follow the frozen common-v1 weights (DEC-001 #1):
+# core_correctness 35, reasoning_correctness 25, completeness 20,
+# scope_precision 10, evidence_actionability 10; total 100.
+schema_version: ground-truth-v1
+case_id: qwenpaw-case-z-corrupt-inbox-recovery-bug
+task_type: bug_localization
+scoring_profile: bug_localization_v1
+rubric_items:
+  # ---- core_correctness (35): root cause, trigger, failure outcome ----------
+  - id: core.loader-root-cause
+    dimension: core_correctness
+    points: 20
+    criterion: >-
+      Identify the shared loader `_load_events` as the root cause: it calls
+      `read_text` and `json.loads` without handling malformed JSON
+      (`json.JSONDecodeError`) or read errors (`OSError`), so these escape
+      instead of producing a recoverable state or an explicit store error.
+    full_credit: >-
+      Names `_load_events`, the escaping `json.JSONDecodeError`/`OSError`, and
+      that no recovery or explicit store error is produced.
+    partial_credit: >-
+      Identifies the shared read path but only describes the HTTP 500 symptom
+      without naming the unhandled exception or the missing recovery.
+    zero_credit: >-
+      Attributes the primary root cause to the non-atomic normal write
+      (`_save_events`) rather than the unhandled read-side failure.
+    critical: true
+    references:
+      - symbol: _load_events
+        file: src/qwenpaw/app/inbox_store.py
+  - id: core.append-read-modify-write
+    dimension: core_correctness
+    points: 15
+    criterion: >-
+      Identify that `append_event` is read-modify-write: it reads all existing
+      events before inserting and saving a new one, so one malformed existing
+      document prevents all future events from repairing or replacing it.
+    references:
+      - symbol: append_event
+        file: src/qwenpaw/app/inbox_store.py
+  # ---- reasoning_correctness (25): root-cause-to-failure chain --------------
+  - id: reasoning.read-chain-http500
+    dimension: reasoning_correctness
+    points: 13
+    criterion: >-
+      Trace the read failure chain: GET /console/inbox/events ->
+      get_inbox_events -> list_events -> _load_events -> json.loads raises ->
+      HTTP 500.
+    zero_credit: >-
+      Reverses the causal direction, or claims the list endpoint does not touch
+      the shared loader.
+    critical: true
+    references:
+      - symbol: get_inbox_events
+        file: src/qwenpaw/app/routers/console.py
+      - symbol: list_events
+        file: src/qwenpaw/app/inbox_store.py
+  - id: reasoning.append-chain-blocked
+    dimension: reasoning_correctness
+    points: 12
+    criterion: >-
+      Trace the write failure chain: cron/heartbeat completion ->
+      append_inbox_event (alias) -> append_event -> _load_events raises -> no
+      new inbox event saved, even though the cron job and heartbeat execute to
+      completion.
+    references:
+      - symbol: CronManager._execute_once
+        file: src/qwenpaw/app/crons/manager.py
+      - symbol: run_heartbeat_once
+        file: src/qwenpaw/app/crons/heartbeat.py
+      - symbol: append_event
+        file: src/qwenpaw/app/inbox_store.py
+  # ---- completeness (20): blast radius, related paths, recovery -------------
+  - id: completeness.blast-radius
+    dimension: completeness
+    points: 10
+    criterion: >-
+      State the blast radius: read, append, mark-read and delete paths all call
+      `_load_events`, so the impact is wider than the list endpoint; completed
+      cron jobs and heartbeats cannot append new inbox results.
+    references:
+      - symbol: _load_events
+        file: src/qwenpaw/app/inbox_store.py
+  - id: completeness.recovery-direction
+    dimension: completeness
+    points: 10
+    criterion: >-
+      Give a recovery direction that does not destroy already-valid events:
+      quarantine/backup the malformed file plus explicit diagnostics, rather
+      than silently returning an empty list (which would restore availability
+      but could hide and overwrite recoverable valid prefixes); note
+      `_save_events` already uses temporary-file replacement, so the needed fix
+      is read-side recovery, not write atomicity.
+    references:
+      - symbol: _load_events
+        file: src/qwenpaw/app/inbox_store.py
+      - symbol: _save_events
+        file: src/qwenpaw/app/inbox_store.py
+  # ---- scope_precision (10): exclude false causes and unrelated modules ------
+  - id: precision.exclude-atomic-write-false-cause
+    dimension: scope_precision
+    points: 5
+    criterion: >-
+      Exclude the false root cause: `_save_events` already writes a temporary
+      file then replaces the target, so the non-atomic normal write is not the
+      root cause for this scenario; the module-level `asyncio.Lock` only
+      serializes coroutines in one process and does not catch parse/read
+      failures or coordinate multiple processes.
+    references:
+      - symbol: _save_events
+        file: src/qwenpaw/app/inbox_store.py
+  - id: precision.exclude-unrelated-stores
+    dimension: scope_precision
+    points: 5
+    criterion: >-
+      Exclude unrelated modules from the impact: `inbox_trace_store` (trace
+      persistence is a separate store and does not parse `inbox_events.json`)
+      and `console_push_store` (console push delivery uses different storage
+      and cannot repair the inbox document).
+  # ---- evidence_actionability (10): evidence, fix and test direction --------
+  - id: evidence.fix-and-test-direction
+    dimension: evidence_actionability
+    points: 10
+    criterion: >-
+      Provide source-backed evidence and an actionable validation direction:
+      add `tests/unit/app/test_inbox_store.py` with `_INBOX_PATH` redirected to
+      `tmp_path` and malformed, empty, valid and non-list JSON fixtures; assert
+      `list_events` and `append_event` have a defined recovery result, preserve
+      a diagnostic copy of the malformed file, and allow the new event to be
+      read afterward; add router and heartbeat/cron tests so the store failure
+      is translated or recovered deliberately rather than surfacing as an
+      unrelated 500.
+    references:
+      - symbol: _load_events
+        file: src/qwenpaw/app/inbox_store.py
+      - symbol: append_event
+        file: src/qwenpaw/app/inbox_store.py

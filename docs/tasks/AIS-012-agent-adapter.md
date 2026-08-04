@@ -1,6 +1,6 @@
 # AIS-012 Claude Code AgentAdapter
 
-State: READY_FOR_REVIEW
+State: CHANGES_REQUIRED
 
 ## Objective
 
@@ -47,3 +47,9 @@ Implement a parameterized Claude Code CLI adapter for the Runner so a Case can b
 - Executor result: `READY_FOR_REVIEW` at `3fd2e04744e222b21cba6fbbec80ba58b8153840` (base `12e8077f58e5f90721e610cdccbcb0538e9f92b3`).
 - Checks: Adapter tests 54 passed; full suite 760 passed; Ruff and diff check passed.
 - Real Claude service was not invoked. The adapter is not yet wired to a CLI subcommand or formal experiment dispatch.
+
+## Review 1 result
+
+- Verdict: `CHANGES_REQUIRED` for `3fd2e04744e222b21cba6fbbec80ba58b8153840`.
+- Blocking findings: Windows executable discovery may select the extensionless npm shim (WinError 193); CLI output is decoded with the locale instead of explicit UTF-8, so Chinese output fails under cp936.
+- Required remediation: use Windows-safe executable discovery, force UTF-8 decoding with a documented error policy, catch launch `OSError` as an adapter error, and add regression tests for default discovery, non-ASCII output and Grep MCP path validation.

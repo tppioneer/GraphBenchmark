@@ -759,7 +759,13 @@ def _validate_policy_enforced(policy_enforced: bool) -> None:
 
 
 def build_parser() -> argparse.ArgumentParser:
-    """Construct the top-level benchmark argument parser."""
+    """Construct the top-level benchmark argument parser.
+
+    The default (no subcommand) behaviour is unchanged: it returns 0. The
+    ``dispatch`` subcommand (AIS-012) loads a YAML experiment config, validates
+    its Case and Ground Truth/Profile, and optionally builds a dispatch plan
+    or executes planned runs.
+    """
     parser = argparse.ArgumentParser(
         prog="graphbenchmark",
         description=(
@@ -767,19 +773,146 @@ def build_parser() -> argparse.ArgumentParser:
             "Execution, judging and reporting are added by later tasks."
         ),
     )
+    subparsers = parser.add_subparsers(dest="command")
+
+    dispatch_parser = subparsers.add_parser(
+        "dispatch",
+        help="Validate/dry-run/execute an experiment config (AIS-012).",
+        description=(
+            "Load a YAML experiment config, validate its Case and Ground "
+            "Truth/Profile, and optionally build a dispatch plan or execute "
+            "planned runs. smoke_only configs validate but never execute."
+        ),
+    )
+    dispatch_parser.add_argument(
+        "config", help="Path to the experiment YAML configuration file."
+    )
+    dispatch_parser.add_argument(
+        "--repo-root",
+        help=(
+            "Repository root for resolving relative Case/GT paths "
+            "(default: current working directory)."
+        ),
+    )
+    mode = dispatch_parser.add_mutually_exclusive_group()
+    mode.add_argument(
+        "--validate-only",
+        action="store_true",
+        help="Validate config + Case + GT/Profile and exit (default).",
+    )
+    mode.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="Validate and build a dispatch plan without executing.",
+    )
+    mode.add_argument(
+        "--execute",
+        action="store_true",
+        help=(
+            "Execute planned runs (requires complete runtime fields; "
+            "opt-in guard)."
+        ),
+    )
+    dispatch_parser.add_argument(
+        "--runs-root",
+        help="Override the runs_root directory for execution.",
+    )
     return parser
 
 
 def main(argv: list[str] | None = None) -> int:
     """Run the benchmark CLI and return an exit code.
 
-    v1 ships a minimal parser; the reusable lifecycle API is :func:`execute_run`
-    (used directly by tests and future CLI wiring). Concrete CLI subcommands that
-    load cases, select an agent adapter and dispatch :func:`execute_run` are
-    added by later tasks.
+    The default (no subcommand) returns 0, preserving existing behaviour. The
+    ``dispatch`` subcommand delegates to :func:`_run_dispatch_cli`.
     """
     parser = build_parser()
-    parser.parse_args(argv)
+    args = parser.parse_args(argv)
+    if getattr(args, "command", None) == "dispatch":
+        return _run_dispatch_cli(args)
+    return 0
+
+
+def _run_dispatch_cli(args: argparse.Namespace) -> int:
+    """Handle the ``dispatch`` subcommand (AIS-012).
+
+    Lazily imports :mod:`runner.experiment_dispatch` to avoid a circular
+    import at module load time.
+    """
+    import sys
+
+    from .experiment_dispatch import (
+        DispatchError,
+        RuntimeFields,
+        build_dispatch_plan,
+        execute_dispatch,
+        load_experiment_config,
+        validate_experiment_config,
+    )
+
+    repo_root = args.repo_root
+    try:
+        config = load_experiment_config(args.config, repo_root=repo_root)
+    except DispatchError as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return 2
+
+    # Build a runtime override if --runs-root is given.
+    runtime_override: RuntimeFields | None = None
+    if args.runs_root:
+        base = config.runtime
+        if base is not None:
+            runtime_override = RuntimeFields(
+                agent_model=base.agent_model,
+                repo_cwd=base.repo_cwd,
+                graph_mcp_configs=base.graph_mcp_configs,
+                grep_mcp_configs=base.grep_mcp_configs,
+                skill_text=base.skill_text,
+                skill_file=base.skill_file,
+                plugin_dirs=base.plugin_dirs,
+                permission_mode=base.permission_mode,
+                runs_root=Path(args.runs_root),
+                output_root=base.output_root,
+                case_prompt=base.case_prompt,
+            )
+        else:
+            runtime_override = RuntimeFields(runs_root=Path(args.runs_root))
+
+    if args.execute or args.dry_run:
+        plan = build_dispatch_plan(config, runtime=runtime_override)
+        if plan.validation_issues:
+            for issue in plan.validation_issues:
+                print(f"  {issue}")
+        if not plan.runs:
+            print("  (no planned runs)")
+        else:
+            for run in plan.runs:
+                print(
+                    f"  {run.run_id}  condition={run.condition_id} "
+                    f"policy={run.tool_policy} repeat={run.repeat}"
+                )
+        if args.dry_run:
+            if plan.validation_issues:
+                return 1
+            print(f"dry-run OK: {len(plan.runs)} planned run(s)")
+            return 0
+        # --execute
+        try:
+            results = execute_dispatch(plan, allow_execute=True)
+        except DispatchError as exc:
+            print(f"error: {exc}", file=sys.stderr)
+            return 2
+        for r in results:
+            print(f"  {r.run_id}: status={r.status.value}")
+        return 0
+
+    # Default: validate-only.
+    issues = validate_experiment_config(config)
+    if issues:
+        for issue in issues:
+            print(f"  {issue}")
+        return 1
+    print(f"config {config.experiment_id!r} is valid")
     return 0
 
 

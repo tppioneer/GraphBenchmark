@@ -1,6 +1,6 @@
 # AIS-012 Claude Code AgentAdapter
 
-State: IMPLEMENTING
+State: READY_FOR_REVIEW
 
 ## Objective
 
@@ -41,3 +41,9 @@ Implement a parameterized Claude Code CLI adapter for the Runner so a Case can b
 ## Delivery contract
 
 - Scoped commit plus strict `AGENT_RESULT` with command/flag evidence, parser limitations, and explicit statement that no real Claude session or Judge call was made.
+
+## Execution result
+
+- Executor result: `READY_FOR_REVIEW` at `3fd2e04744e222b21cba6fbbec80ba58b8153840` (base `12e8077f58e5f90721e610cdccbcb0538e9f92b3`).
+- Checks: Adapter tests 54 passed; full suite 760 passed; Ruff and diff check passed.
+- Real Claude service was not invoked. The adapter is not yet wired to a CLI subcommand or formal experiment dispatch.

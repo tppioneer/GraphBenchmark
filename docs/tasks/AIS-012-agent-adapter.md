@@ -1,6 +1,6 @@
 # AIS-012 Claude Code AgentAdapter
 
-State: CHANGES_REQUIRED
+State: VERIFIED
 
 ## Objective
 
@@ -59,3 +59,9 @@ Implement a parameterized Claude Code CLI adapter for the Runner so a Case can b
 - Executor result: `READY_FOR_REVIEW` at `65012a6475baa8f6eb578d572f6fd6a34432c689` (base `3fd2e04744e222b21cba6fbbec80ba58b8153840`).
 - Fixed: PATHEXT-aware `shutil.which` discovery, explicit UTF-8 byte decoding, launch `OSError` conversion, default discovery/Grep-path regressions, and non-success stream subtype handling.
 - Checks: focused adapter suite 60 passed; full suite 766 passed; Ruff and diff check passed. No real Claude or Judge call was made.
+
+## Review 2 result
+
+- Verdict: `PASS` for `3fd2e04744e222b21cba6fbbec80ba58b8153840..65012a6475baa8f6eb578d572f6fd6a34432c689`.
+- No blocking findings. Windows executable discovery, UTF-8 decoding, launch error conversion and stream subtype handling were independently verified; prior Graph/Grep isolation and Runner contracts remain intact.
+- Residual P3 risks: permissive missing subtype handling, deliberate `errors="replace"` behavior for corrupted bytes, and a cosmetic CLI version reference in the module docstring.

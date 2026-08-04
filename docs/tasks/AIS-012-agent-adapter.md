@@ -53,3 +53,9 @@ Implement a parameterized Claude Code CLI adapter for the Runner so a Case can b
 - Verdict: `CHANGES_REQUIRED` for `3fd2e04744e222b21cba6fbbec80ba58b8153840`.
 - Blocking findings: Windows executable discovery may select the extensionless npm shim (WinError 193); CLI output is decoded with the locale instead of explicit UTF-8, so Chinese output fails under cp936.
 - Required remediation: use Windows-safe executable discovery, force UTF-8 decoding with a documented error policy, catch launch `OSError` as an adapter error, and add regression tests for default discovery, non-ASCII output and Grep MCP path validation.
+
+## Remediation result
+
+- Executor result: `READY_FOR_REVIEW` at `65012a6475baa8f6eb578d572f6fd6a34432c689` (base `3fd2e04744e222b21cba6fbbec80ba58b8153840`).
+- Fixed: PATHEXT-aware `shutil.which` discovery, explicit UTF-8 byte decoding, launch `OSError` conversion, default discovery/Grep-path regressions, and non-success stream subtype handling.
+- Checks: focused adapter suite 60 passed; full suite 766 passed; Ruff and diff check passed. No real Claude or Judge call was made.

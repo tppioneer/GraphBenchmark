@@ -1,6 +1,6 @@
 # AIS-012 Claude Code AgentAdapter
 
-State: VERIFIED
+State: INTEGRATED
 
 ## Objective
 
@@ -65,3 +65,4 @@ Implement a parameterized Claude Code CLI adapter for the Runner so a Case can b
 - Verdict: `PASS` for `3fd2e04744e222b21cba6fbbec80ba58b8153840..65012a6475baa8f6eb578d572f6fd6a34432c689`.
 - No blocking findings. Windows executable discovery, UTF-8 decoding, launch error conversion and stream subtype handling were independently verified; prior Graph/Grep isolation and Runner contracts remain intact.
 - Residual P3 risks: permissive missing subtype handling, deliberate `errors="replace"` behavior for corrupted bytes, and a cosmetic CLI version reference in the module docstring.
+- Integration: remediation files integrated to `ai-score-v1` as `4a2bd6f`; post-integration full suite `766 passed`, Ruff and diff checks passed.

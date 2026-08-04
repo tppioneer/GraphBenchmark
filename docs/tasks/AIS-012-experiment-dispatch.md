@@ -1,6 +1,6 @@
 # AIS-012 configuration-driven experiment dispatch
 
-State: IMPLEMENTING
+State: READY_FOR_REVIEW
 
 ## Objective
 
@@ -31,3 +31,10 @@ Add a configuration-driven dispatch layer that loads an experiment YAML, validat
 ## Delivery contract
 
 - Scoped commit and strict `AGENT_RESULT`; no real Claude session, Judge call, credential access or external repository mutation.
+
+## Execution result
+
+- Executor result: `READY_FOR_REVIEW` at `4406a39fb5aecce3002b6b85f591f9e7341bcd59` (base `8a227d795d1a9468838d47129c43afb0804a41c9`).
+- Delivery: `runner/experiment_dispatch.py`, 47 focused tests, and a `dispatch` CLI subcommand.
+- Checks: focused 47 passed; full suite 813 passed; Ruff and diff check passed.
+- Guard evidence: shipped `status: smoke_only` configuration is refused even with runtime overrides; no real Claude/MCP/Judge/repository execution occurred.

@@ -666,6 +666,134 @@ class TestValidationFailures:
         codes = [i.code for i in issues]
         assert "RUNTIME_SKILL_FILE_MISSING" in codes
 
+    def test_non_dict_gt_rejected(self, tmp_path: Path) -> None:
+        """P2: non-dict GT YAML is rejected explicitly, matching Case behavior."""
+        case = _write_case(tmp_path)
+        gt = tmp_path / "gt.yaml"
+        gt.write_text("- just\n- a\n- list\n", encoding="utf-8")
+        rt = _full_runtime(tmp_path)
+        cfg = _write_config(tmp_path, case_path=case, gt_path=gt, runtime=rt)
+        config = load_experiment_config(cfg)
+        issues = validate_experiment_config(config)
+        codes = [i.code for i in issues]
+        assert "GT_NOT_OBJECT" in codes
+
+    def test_duplicate_condition_ids_rejected(self, tmp_path: Path) -> None:
+        """P2: duplicate condition IDs are rejected during plan validation."""
+        case = _write_case(tmp_path)
+        gt = _write_gt(tmp_path)
+        rt = _full_runtime(tmp_path)
+        cfg = _write_config(
+            tmp_path, case_path=case, gt_path=gt, runtime=rt,
+            conditions=[
+                {"id": "graph", "tool_policy": "graph"},
+                {"id": "graph", "tool_policy": "grep"},
+            ],
+        )
+        config = load_experiment_config(cfg)
+        issues = validate_experiment_config(config)
+        codes = [i.code for i in issues]
+        assert "CONFIG_DUPLICATE_CONDITION_ID" in codes
+        # Plan is not executable.
+        plan = build_dispatch_plan(config)
+        assert not plan.is_executable
+
+    def test_condition_id_sanitized_collision_rejected(
+        self, tmp_path: Path
+    ) -> None:
+        """P2: condition IDs that sanitize to the same run-id component collide."""
+        case = _write_case(tmp_path)
+        gt = _write_gt(tmp_path)
+        rt = _full_runtime(tmp_path)
+        # "a/b" and "a*b" both sanitize to "a_b" (/ and * are unsafe chars).
+        cfg = _write_config(
+            tmp_path, case_path=case, gt_path=gt, runtime=rt,
+            conditions=[
+                {"id": "a/b", "tool_policy": "graph"},
+                {"id": "a*b", "tool_policy": "grep"},
+            ],
+        )
+        config = load_experiment_config(cfg)
+        issues = validate_experiment_config(config)
+        codes = [i.code for i in issues]
+        assert "CONFIG_CONDITION_ID_COLLISION" in codes
+        # The run IDs would collide (both sanitize to a_b).
+        plan = build_dispatch_plan(config)
+        ids = [r.run_id for r in plan.runs]
+        assert len(set(ids)) < len(ids)  # collision present
+        assert not plan.is_executable
+
+    def test_runtime_override_bad_paths_rejected(self, tmp_path: Path) -> None:
+        """P2: runtime override paths are validated in build_dispatch_plan.
+
+        Bad override paths must surface as deterministic Dispatch/config
+        errors (ConfigValidationError), not uncaught AgentAdapterError at
+        adapter construction time.
+        """
+        case = _write_case(tmp_path)
+        gt = _write_gt(tmp_path)
+        rt = _full_runtime(tmp_path)
+        cfg = _write_config(tmp_path, case_path=case, gt_path=gt, runtime=rt)
+        config = load_experiment_config(cfg)
+        override = RuntimeFields(
+            agent_model="glm-5.2",
+            repo_cwd=tmp_path / "nonexistent-dir",
+            graph_mcp_configs=(tmp_path / "nonexistent-mcp.json",),
+            runs_root=tmp_path / "runs",
+            case_prompt="override",
+        )
+        plan = build_dispatch_plan(config, runtime=override)
+        codes = [i.code for i in plan.validation_issues]
+        assert "RUNTIME_REPO_CWD_MISSING" in codes
+        assert "RUNTIME_GRAPH_MCP_MISSING" in codes
+        assert not plan.is_executable
+        with pytest.raises(ConfigValidationError):
+            execute_dispatch(plan, allow_execute=True)
+
+    def test_runtime_override_bad_skill_file_rejected(
+        self, tmp_path: Path
+    ) -> None:
+        """P2: a bad skill_file in the override is caught as a config error."""
+        case = _write_case(tmp_path)
+        gt = _write_gt(tmp_path)
+        rt = _full_runtime(tmp_path)
+        cfg = _write_config(tmp_path, case_path=case, gt_path=gt, runtime=rt)
+        config = load_experiment_config(cfg)
+        override = RuntimeFields(
+            agent_model="glm-5.2",
+            repo_cwd=config.runtime.repo_cwd,
+            graph_mcp_configs=config.runtime.graph_mcp_configs,
+            skill_file=tmp_path / "nonexistent.skill",
+            runs_root=tmp_path / "runs",
+            case_prompt="override",
+        )
+        plan = build_dispatch_plan(config, runtime=override)
+        codes = [i.code for i in plan.validation_issues]
+        assert "RUNTIME_SKILL_FILE_MISSING" in codes
+        assert not plan.is_executable
+
+    def test_runtime_override_bad_plugin_dir_rejected(
+        self, tmp_path: Path
+    ) -> None:
+        """P2: a bad plugin_dir in the override is caught as a config error."""
+        case = _write_case(tmp_path)
+        gt = _write_gt(tmp_path)
+        rt = _full_runtime(tmp_path)
+        cfg = _write_config(tmp_path, case_path=case, gt_path=gt, runtime=rt)
+        config = load_experiment_config(cfg)
+        override = RuntimeFields(
+            agent_model="glm-5.2",
+            repo_cwd=config.runtime.repo_cwd,
+            graph_mcp_configs=config.runtime.graph_mcp_configs,
+            plugin_dirs=(tmp_path / "nonexistent-plugins",),
+            runs_root=tmp_path / "runs",
+            case_prompt="override",
+        )
+        plan = build_dispatch_plan(config, runtime=override)
+        codes = [i.code for i in plan.validation_issues]
+        assert "RUNTIME_PLUGIN_DIR_MISSING" in codes
+        assert not plan.is_executable
+
 
 # --------------------------------------------------------------------------- #
 # Run ID safety
@@ -821,6 +949,88 @@ class TestGraphGrepIsolation:
                 task_type="bug_localization",
                 tool_policy="grep",
             )
+
+    def test_default_factory_clears_graph_patterns_for_grep(
+        self, tmp_path: Path
+    ) -> None:
+        """P1: the default factory must clear Graph tool-name patterns for Grep.
+
+        The default ``ToolNamePatterns(graph=(^mcp__gitnexus,))`` causes
+        ``_select_mcp_configs('grep')`` to fail closed. The factory passes an
+        explicit empty Graph pattern set for Grep runs so a real Grep adapter
+        can actually execute.
+        """
+        from runner.experiment_dispatch import _default_adapter_factory
+
+        case = _write_case(tmp_path)
+        gt = _write_gt(tmp_path)
+        graph_mcp = _write_mcp_config(tmp_path, "graph.json")
+        grep_mcp = _write_mcp_config(tmp_path, "grep.json")
+        repo_dir = tmp_path / "repo"
+        repo_dir.mkdir()
+        rt = {
+            "agent_model": "glm-5.2",
+            "repo_cwd": str(repo_dir),
+            "graph_mcp_configs": [str(graph_mcp)],
+            "grep_mcp_configs": [str(grep_mcp)],
+            "runs_root": str(tmp_path / "runs"),
+        }
+        cfg = _write_config(tmp_path, case_path=case, gt_path=gt, runtime=rt)
+        config = load_experiment_config(cfg)
+        plan = build_dispatch_plan(config)
+
+        grep_run = plan.runs[1]  # grep condition
+        adapter = _default_adapter_factory(grep_run, plan)
+        # Graph patterns cleared for grep.
+        assert adapter._tool_name_patterns.graph == ()
+        # Selecting MCP configs for grep must NOT raise (the P1 bug).
+        configs = adapter._select_mcp_configs("grep")
+        assert configs == (str(grep_mcp),)
+
+    def test_default_factory_preserves_graph_patterns_for_graph_and_mixed(
+        self, tmp_path: Path
+    ) -> None:
+        """P1: Graph and Mixed runs keep the default Graph tool-name patterns.
+
+        Only Grep runs have Graph patterns cleared; Graph and Mixed runs need
+        them to classify Graph tool-use events.
+        """
+        from runner.experiment_dispatch import _default_adapter_factory
+
+        case = _write_case(tmp_path)
+        gt = _write_gt(tmp_path)
+        graph_mcp = _write_mcp_config(tmp_path, "graph.json")
+        grep_mcp = _write_mcp_config(tmp_path, "grep.json")
+        repo_dir = tmp_path / "repo"
+        repo_dir.mkdir()
+        rt = {
+            "agent_model": "glm-5.2",
+            "repo_cwd": str(repo_dir),
+            "graph_mcp_configs": [str(graph_mcp)],
+            "grep_mcp_configs": [str(grep_mcp)],
+            "runs_root": str(tmp_path / "runs"),
+        }
+        cfg = _write_config(
+            tmp_path, case_path=case, gt_path=gt, runtime=rt,
+            conditions=[
+                {"id": "graph", "tool_policy": "graph"},
+                {"id": "grep", "tool_policy": "grep"},
+                {"id": "mixed", "tool_policy": "mixed"},
+            ],
+        )
+        config = load_experiment_config(cfg)
+        plan = build_dispatch_plan(config)
+
+        graph_adapter = _default_adapter_factory(plan.runs[0], plan)
+        mixed_adapter = _default_adapter_factory(plan.runs[2], plan)
+        # Default Graph patterns preserved for graph and mixed.
+        assert graph_adapter._tool_name_patterns.graph == (r"^mcp__gitnexus",)
+        assert mixed_adapter._tool_name_patterns.graph == (r"^mcp__gitnexus",)
+        # MCP config selection works for all policies (no fail-closed).
+        assert graph_adapter._select_mcp_configs("graph") == (str(graph_mcp),)
+        assert mixed_adapter._select_mcp_configs("mixed") == (
+            str(graph_mcp), str(grep_mcp),
+        )
 
 
 # --------------------------------------------------------------------------- #

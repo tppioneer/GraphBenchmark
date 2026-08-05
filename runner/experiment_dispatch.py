@@ -54,6 +54,7 @@ from runner.claude_code_adapter import (
     DEFAULT_AGENT_MODEL,
     DEFAULT_PERMISSION_MODE,
     ClaudeCodeAgentAdapter,
+    ToolNamePatterns,
 )
 from scoring.rubric_validator import validate_profile_and_rubric
 
@@ -355,6 +356,38 @@ def validate_experiment_config(
                 pointer="/conditions",
             ))
 
+    # -- Duplicate condition IDs and sanitized run-id collisions -------------- #
+    # Run IDs are built from sanitized condition IDs; two conditions with the
+    # same id, or ids that sanitize to the same component, would produce
+    # colliding run IDs. No colliding runs may be executable.
+    seen_ids: set[str] = set()
+    seen_sanitized: dict[str, str] = {}
+    for cond in config.conditions:
+        if cond.id in seen_ids:
+            issues.append(ValidationIssue(
+                code="CONFIG_DUPLICATE_CONDITION_ID",
+                message=f"duplicate condition id {cond.id!r}",
+                source="config",
+                pointer="/conditions",
+            ))
+        else:
+            seen_ids.add(cond.id)
+        sanitized = _sanitize_run_id_component(cond.id)
+        prior = seen_sanitized.get(sanitized)
+        if prior is not None and prior != cond.id:
+            issues.append(ValidationIssue(
+                code="CONFIG_CONDITION_ID_COLLISION",
+                message=(
+                    f"condition id {cond.id!r} sanitizes to {sanitized!r}, "
+                    f"colliding with condition {prior!r}; run IDs would not "
+                    f"be unique"
+                ),
+                source="config",
+                pointer="/conditions",
+            ))
+        else:
+            seen_sanitized[sanitized] = cond.id
+
     # -- Case schema validation --------------------------------------------- #
     case_doc = _safe_load_yaml(config.case_path, issues, "case")
     if case_doc is not None:
@@ -395,43 +428,50 @@ def validate_experiment_config(
 
     # -- GT/Profile validation via production validator ----------------------- #
     gt_doc = _safe_load_yaml(config.ground_truth_path, issues, "ground_truth")
-    if gt_doc is not None and isinstance(gt_doc, dict):
-        for ri in validate_profile_and_rubric(gt_doc):
+    if gt_doc is not None:
+        if isinstance(gt_doc, dict):
+            for ri in validate_profile_and_rubric(gt_doc):
+                issues.append(ValidationIssue(
+                    code=ri.code,
+                    message=ri.message,
+                    source="gt_profile",
+                    pointer=ri.pointer,
+                ))
+            if gt_doc.get("case_id") != config.case_id:
+                issues.append(ValidationIssue(
+                    code="CROSS_GT_CASE_ID_MISMATCH",
+                    message=(
+                        f"GT case_id {gt_doc.get('case_id')!r} != "
+                        f"config case_id {config.case_id!r}"
+                    ),
+                    source="cross_check",
+                    pointer="/case_id",
+                ))
+            if gt_doc.get("task_type") != config.task_type:
+                issues.append(ValidationIssue(
+                    code="CROSS_GT_TASK_TYPE_MISMATCH",
+                    message=(
+                        f"GT task_type {gt_doc.get('task_type')!r} != "
+                        f"config task_type {config.task_type!r}"
+                    ),
+                    source="cross_check",
+                    pointer="/task_type",
+                ))
+            if gt_doc.get("scoring_profile") != config.scoring_profile:
+                issues.append(ValidationIssue(
+                    code="CROSS_GT_PROFILE_MISMATCH",
+                    message=(
+                        f"GT scoring_profile {gt_doc.get('scoring_profile')!r} "
+                        f"!= config scoring_profile {config.scoring_profile!r}"
+                    ),
+                    source="cross_check",
+                    pointer="/scoring_profile",
+                ))
+        else:
             issues.append(ValidationIssue(
-                code=ri.code,
-                message=ri.message,
+                code="GT_NOT_OBJECT",
+                message="ground truth document must be a YAML mapping",
                 source="gt_profile",
-                pointer=ri.pointer,
-            ))
-        if gt_doc.get("case_id") != config.case_id:
-            issues.append(ValidationIssue(
-                code="CROSS_GT_CASE_ID_MISMATCH",
-                message=(
-                    f"GT case_id {gt_doc.get('case_id')!r} != "
-                    f"config case_id {config.case_id!r}"
-                ),
-                source="cross_check",
-                pointer="/case_id",
-            ))
-        if gt_doc.get("task_type") != config.task_type:
-            issues.append(ValidationIssue(
-                code="CROSS_GT_TASK_TYPE_MISMATCH",
-                message=(
-                    f"GT task_type {gt_doc.get('task_type')!r} != "
-                    f"config task_type {config.task_type!r}"
-                ),
-                source="cross_check",
-                pointer="/task_type",
-            ))
-        if gt_doc.get("scoring_profile") != config.scoring_profile:
-            issues.append(ValidationIssue(
-                code="CROSS_GT_PROFILE_MISMATCH",
-                message=(
-                    f"GT scoring_profile {gt_doc.get('scoring_profile')!r} "
-                    f"!= config scoring_profile {config.scoring_profile!r}"
-                ),
-                source="cross_check",
-                pointer="/scoring_profile",
             ))
 
     # -- Runtime path validation --------------------------------------------- #
@@ -465,6 +505,15 @@ def build_dispatch_plan(
 
     effective_runtime = runtime if runtime is not None else config.runtime
 
+    # When a runtime override is supplied, validate its paths independently.
+    # validate_experiment_config checked config.runtime (if any); the override
+    # replaces it for execution, so its paths must also be validated here so
+    # misconfigured paths surface as deterministic Dispatch/config errors
+    # (ConfigValidationError at execute_dispatch) rather than uncaught
+    # AgentAdapterError at adapter construction time.
+    if runtime is not None:
+        issues.extend(_validate_runtime_paths(runtime))
+
     # Resolve the case prompt (the agent's input). If the case is loadable
     # and has a non-empty ``question``, use it. A runtime ``case_prompt``
     # override takes precedence.
@@ -490,6 +539,10 @@ def build_dispatch_plan(
             message=str(exc),
             source="config",
         ))
+
+    # Deterministic ordering for issues collected from multiple sources
+    # (config validation, runtime override paths, run-id safety).
+    issues.sort(key=lambda x: (x.source, x.code, x.pointer, x.message))
 
     return DispatchPlan(
         experiment_id=config.experiment_id,
@@ -859,6 +912,13 @@ def _default_adapter_factory(
     enforcing Graph/Grep isolation at adapter construction time. A Graph run
     receives only ``graph_mcp_configs``; a Grep run receives only
     ``grep_mcp_configs``; a Mixed run receives both.
+
+    For Grep runs the default Graph tool-name patterns
+    (``(^mcp__gitnexus,)``) are explicitly cleared. The adapter fails closed
+    in ``_select_mcp_configs`` if any Graph tool-name patterns are configured
+    for a Grep run; without clearing them, every real Grep adapter would
+    raise ``AgentPolicyConfigError`` before it could execute. Graph and Mixed
+    runs keep the default patterns (Graph tools are expected there).
     """
     runtime = plan.runtime
     assert runtime is not None  # checked by execute_dispatch
@@ -866,12 +926,17 @@ def _default_adapter_factory(
     if run.tool_policy == "graph":
         graph_mcp = runtime.graph_mcp_configs
         grep_mcp: tuple[Path, ...] = ()
+        tool_name_patterns: ToolNamePatterns | None = None
     elif run.tool_policy == "grep":
         graph_mcp = ()
         grep_mcp = runtime.grep_mcp_configs
+        # Clear Graph tool-name patterns so the adapter does not fail closed
+        # in _select_mcp_configs for grep policy.
+        tool_name_patterns = ToolNamePatterns(graph=())
     elif run.tool_policy == "mixed":
         graph_mcp = runtime.graph_mcp_configs
         grep_mcp = runtime.grep_mcp_configs
+        tool_name_patterns = None
     else:
         raise DispatchError(f"unknown tool_policy: {run.tool_policy!r}")
 
@@ -887,6 +952,7 @@ def _default_adapter_factory(
         skill_text=runtime.skill_text,
         skill_file=runtime.skill_file,
         permission_mode=runtime.permission_mode,
+        tool_name_patterns=tool_name_patterns,
     )
 
 

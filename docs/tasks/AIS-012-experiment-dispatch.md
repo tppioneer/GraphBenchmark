@@ -1,6 +1,6 @@
 # AIS-012 configuration-driven experiment dispatch
 
-State: READY_FOR_REVIEW
+State: CHANGES_REQUIRED
 
 ## Objective
 
@@ -38,3 +38,10 @@ Add a configuration-driven dispatch layer that loads an experiment YAML, validat
 - Delivery: `runner/experiment_dispatch.py`, 47 focused tests, and a `dispatch` CLI subcommand.
 - Checks: focused 47 passed; full suite 813 passed; Ruff and diff check passed.
 - Guard evidence: shipped `status: smoke_only` configuration is refused even with runtime overrides; no real Claude/MCP/Judge/repository execution occurred.
+
+## Review 1 result
+
+- Verdict: `CHANGES_REQUIRED` for `4406a39fb5aecce3002b6b85f591f9e7341bcd59`.
+- P1: the default adapter factory does not clear Graph tool-name patterns for Grep, so every real Grep execution fails closed before launch.
+- P2: duplicate condition IDs can collide run IDs; runtime path overrides are not validated; non-object GT YAML silently passes dispatcher validation.
+- Required remediation: fix Grep factory configuration, reject duplicate/colliding condition IDs, validate override paths before execution, reject non-dict GT documents, and add regression tests through the real default factory where applicable.

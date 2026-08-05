@@ -1,6 +1,6 @@
 # AIS-012 configuration-driven experiment dispatch
 
-State: CHANGES_REQUIRED
+State: READY_FOR_REVIEW
 
 ## Objective
 
@@ -45,3 +45,9 @@ Add a configuration-driven dispatch layer that loads an experiment YAML, validat
 - P1: the default adapter factory does not clear Graph tool-name patterns for Grep, so every real Grep execution fails closed before launch.
 - P2: duplicate condition IDs can collide run IDs; runtime path overrides are not validated; non-object GT YAML silently passes dispatcher validation.
 - Required remediation: fix Grep factory configuration, reject duplicate/colliding condition IDs, validate override paths before execution, reject non-dict GT documents, and add regression tests through the real default factory where applicable.
+
+## Remediation result
+
+- Executor result: `READY_FOR_REVIEW` at `a6cd41976e8f20e3447d2d9a9c23c828887a38cf` (base `4406a39fb5aecce3002b6b85f591f9e7341bcd59`).
+- Fixed Grep default tool patterns, condition ID collisions, runtime override path validation and non-object GT handling; added 8 regression tests.
+- Checks: full suite 821 passed; Ruff and diff check passed. No real Claude/MCP/Judge execution occurred.

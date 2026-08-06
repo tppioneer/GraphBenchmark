@@ -1,6 +1,6 @@
 # AIS-012 skill isolation remediation
 
-State: READY
+State: IMPLEMENTING
 
 ## Objective
 

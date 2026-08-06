@@ -1,6 +1,6 @@
 # AIS-012 formal configuration and dry-run
 
-State: READY_FOR_REVIEW
+State: VERIFIED
 
 ## Objective
 
@@ -43,3 +43,10 @@ Create the machine-specific formal YAML for the approved QwenPaw case using abso
 ## Review note
 
 The current runtime contract has one global `skill_file` field. The dry-run verifies that Grep receives no Graph MCP, but actual execution would still inject the configured Graph Skill text into Grep unless per-condition Skill isolation is added or explicitly accepted in the execution task.
+
+## Independent review
+
+- Review: `docs/reviews/AIS-012-formal-config-review-1.md`
+- Verdict: `PASS_WITH_NOTES`
+- No blocking implementation finding remains for the dry-run scope.
+- Before formal execution, explicitly decide whether the global Graph Skill injection into Grep is acceptable.

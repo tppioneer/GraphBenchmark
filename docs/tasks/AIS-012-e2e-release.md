@@ -1,6 +1,6 @@
 # AIS-012: 端到端冻结并执行正式实验
 
-State: IMPLEMENTING
+State: READY_FOR_REVIEW
 
 ## Execution
 
@@ -78,3 +78,68 @@ State: IMPLEMENTING
 - run artifact 根目录及完整性报告。
 - 正式报告、离线重算证据和 Judge 调用审计。
 - 无效/缺失 pair、人工复核和残余风险清单。
+
+## Execution result
+
+- Head commit: `2f222a0` (ai-score-v1)
+- Runs root: `F:\develop\00-codes\benchmark-runtime\runs\GraphBenchmark-ai-score-v1`
+- Freeze manifest: `freeze-manifest.yaml` in runs_root
+
+### Agent phase (6 runs)
+
+| Run | Status | Elapsed | Graph q | Search | File read |
+|---|---|---|---|---|---|
+| graph r01 | awaiting-judge | 171s | 1 | 2 | 7 |
+| graph r02 | awaiting-judge | 309s | 2 | 3 | 5 |
+| graph r03 | invalid | 180s | 0 | 5 | 7 |
+| grep r01 | awaiting-judge | 181s | 0 | 2 | 8 |
+| grep r02 | awaiting-judge | 182s | 0 | 5 | 7 |
+| grep r03 | awaiting-judge | 189s | 0 | 6 | 5 |
+
+### Judge phase (formal mode, 2 Judges + arbiter)
+
+| Run | Judge result | Scored | Capped total |
+|---|---|---|---|
+| graph r01 | 2 judges, mean consensus | yes | 85.00 |
+| graph r02 | judge_failed (invalid JSON) | no | - |
+| graph r03 | skipped (policy invalid) | no | - |
+| grep r01 | judge_failed (invalid JSON) | no | - |
+| grep r02 | judge_failed (invalid JSON) | no | - |
+| grep r03 | 3 judges, median consensus, arbiter | yes | 85.00 |
+
+### Report
+
+- Paired pairs: 1 (graph r01 vs grep r03, diff=0.00)
+- Scored: 2, judge_failed: 3, invalid: 1
+- Offline rebuild: digest `sha256:e2500981...` verified identical, 0 Judge calls
+- Report: `report.md`, `report.json` in runs_root
+
+### Acceptance criteria
+
+- Preflight gates all PASS: yes
+- CLI version pinned (2.1.223), judge_model effective (glm-5.2): yes
+- Credentials confirmed (no secret read/written): yes
+- Freeze manifest with code SHA, protocol, digests: yes
+- Run artifacts satisfy §17: yes
+- judge_failed isolated and listed, not in formal score: yes
+- Paired stats consume complete pairs only, missing reasons listed: yes
+- Offline rebuild digest match, 0 Judge calls: yes
+- Report includes absolute, paired diff, cost, stability, limitations: yes
+
+### Residual risks
+
+- Only 1 of 3 possible paired comparisons (2/6 runs scored)
+- 3 Judge failures due to invalid JSON output from glm-5.2 (50% Judge failure rate)
+- 1 Graph run policy-invalid (agent did not use Graph tools)
+- Single paired comparison uses runs from different repeats (r01 vs r03)
+- Judge token usage not captured (provider could not extract from CLI result wrapper)
+
+### Narrow integration fixes (allowed scope)
+
+- `3c043fb`: adapter `--verbose` for CLI 2.1.223 stream-json
+- `98ed513`: adapter `.CMD` -> `.exe` resolution + timeout 600s -> 1200s
+- `b963a9f`: judge provider `.CMD` -> `.exe` CLI discovery
+- `ebf8572`: judge provider UTF-8 decoding + formal pipeline script
+- `d296013`: skip `--json-schema` (incompatible with CLI 2.1.223)
+- `75c6fc7`: parse judge output from CLI result wrapper
+- `scripts/formal_pipeline.py`: Judge -> consensus -> scoring -> report glue

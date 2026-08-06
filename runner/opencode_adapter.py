@@ -20,12 +20,16 @@ servers + deny-by-default permissions) is injected through a subprocess-only
 environment override (``OPENCODE_CONFIG_CONTENT``); it is never persisted to
 disk and never placed in command arguments or audit fields. Both the
 Claude-style ``mcpServers`` shape and the native OpenCode ``mcp`` shape are
-normalized into a single runtime config. ``--pure`` prevents undeclared external
-plugins. The child process inherits the user's global OpenCode provider
-authentication; this adapter does not inspect, print, copy or write credential
-values. ``OPENCODE_CONFIG_CONTENT`` is the task-card-prescribed injection
-mechanism (not discoverable from ``opencode run --help`` alone); it is a module
-constant so it can be retargeted if the CLI renames it.
+normalized into a single runtime config, preserving native remote MCP
+``headers`` (credential-bearing, delivered only via the env override) without
+exposing their values in audit/error output. ``OPENCODE_DISABLE_PROJECT_CONFIG``
+is set to ``"true"`` in the child environment so project-local config cannot
+silently authorize an undeclared MCP tool; the child still inherits the user's
+global OpenCode provider authentication. ``--pure`` prevents undeclared external
+plugins. This adapter does not inspect, print, copy or write credential values.
+``OPENCODE_CONFIG_CONTENT`` is the task-card-prescribed injection mechanism (not
+discoverable from ``opencode run --help`` alone); it is a module constant so it
+can be retargeted if the CLI renames it.
 
 NDJSON event parsing (invariants): the final assistant text becomes
 ``raw_response``; completed tool parts become Runner-observed
@@ -82,6 +86,7 @@ __all__ = [
     "DEFAULT_AGENT_MODEL",
     "DEFAULT_TIMEOUT_SECONDS",
     "OPENCODE_CONFIG_ENV",
+    "OPENCODE_DISABLE_PROJECT_CONFIG_ENV",
     "DEFAULT_ALLOWED_BUILTINS",
     "KNOWN_BUILTINS",
 ]
@@ -96,6 +101,15 @@ DEFAULT_TIMEOUT_SECONDS = 600.0
 #: is never persisted and never placed in argv/audit. Prescribed by the task
 #: card; kept as a constant so it can be retargeted if the CLI renames it.
 OPENCODE_CONFIG_ENV = "OPENCODE_CONFIG_CONTENT"
+
+#: Subprocess-only env guard (R5): set to ``"true"`` in the child environment so
+#: OpenCode ignores project-local config (``opencode.json``/``.opencode.d/``)
+#: and only the injected :data:`OPENCODE_CONFIG_CONTENT` runtime config
+#: authorizes tools/MCP. The child still inherits the user's global Provider
+#: authentication; this adapter never clears, inspects, prints, copies, or writes
+#: credential values. Set in the child env only — the parent environment is never
+#: modified.
+OPENCODE_DISABLE_PROJECT_CONFIG_ENV = "OPENCODE_DISABLE_PROJECT_CONFIG"
 
 USAGE_UNAVAILABLE = 0
 
@@ -346,7 +360,12 @@ class OpenCodeAgentAdapter:
         self.last_tool_policy = tool_policy
         self.last_mcp_servers = tuple(sorted(runtime_config["mcp"].keys()))
 
-        env_extra = {OPENCODE_CONFIG_ENV: _json_dumps(runtime_config)}
+        env_extra = {
+            OPENCODE_CONFIG_ENV: _json_dumps(runtime_config),
+            # R5: disable project-local config so only the injected runtime
+            # config authorizes tools/MCP. Child-only; Provider auth inherited.
+            OPENCODE_DISABLE_PROJECT_CONFIG_ENV: "true",
+        }
         stdout, stderr, returncode = self._run_subprocess(argv, env_extra)
 
         if returncode != 0:
@@ -473,10 +492,12 @@ class OpenCodeAgentAdapter:
         Accepts both the Claude-style ``{"mcpServers": {...}}`` shape and the
         native OpenCode ``{"mcp": {...}}`` shape. Each server is normalized to
         ``{"type": "local"|"remote", "command": [...], "env": {...}, "enabled":
-        True}`` (local) or ``{"type": "remote", "url": ..., "enabled": True}``.
-        Duplicate server names across configs raise :class:`AgentAdapterError`.
-        Credential-bearing ``env`` values are preserved in the returned dict
-        (delivered only via the env override) but never appear in argv/audit.
+        True}`` (local) or ``{"type": "remote", "url": ..., "headers": {...},
+        "enabled": True}`` (remote, when headers are present). Duplicate server
+        names across configs raise :class:`AgentAdapterError`.
+        Credential-bearing ``env``/``headers`` values are preserved in the
+        returned dict (delivered only via the env override) but never appear in
+        argv/audit.
         """
         servers: dict[str, dict[str, Any]] = {}
         for path in paths:
@@ -533,6 +554,15 @@ class OpenCodeAgentAdapter:
             if not isinstance(url, str) or not url:
                 raise AgentAdapterError(f"MCP server {name!r} url must be a non-empty string")
             normalized["url"] = url
+            # Preserve native remote MCP headers (R1). Values are credential-
+            # bearing (e.g. Authorization); they travel only via the env override
+            # and never appear in argv/audit. Validate the mapping shape without
+            # echoing values in the error message.
+            headers = spec.get("headers")
+            if headers is not None:
+                if not isinstance(headers, dict):
+                    raise AgentAdapterError(f"MCP server {name!r} headers must be a JSON object")
+                normalized["headers"] = {str(k): str(v) for k, v in headers.items()}
         else:
             raise AgentAdapterError(f"MCP server {name!r} in {path!r} has no 'command' or 'url'")
         env = spec.get("env", {})
@@ -576,9 +606,13 @@ class OpenCodeAgentAdapter:
         - The final assistant message's text (from ``message.finish``) is the
           authoritative ``raw_response``; ``text.finish`` texts are a fallback
           when no ``message.finish`` is emitted.
-        - Completed tool parts (``tool.finish`` / ``message.finish`` tool parts
-          with state ``completed``) become :class:`ToolEvent`s, classified via
-          :meth:`_classify_tool_name` and stamped with RUNNER_OBSERVED_SOURCE.
+        - Completed tool parts (``tool.finish`` / assistant ``message.finish``
+          tool parts with state ``completed``) become :class:`ToolEvent`s,
+          classified via :meth:`_classify_tool_name` and stamped with
+          RUNNER_OBSERVED_SOURCE. Tool parts from non-assistant messages are
+          ignored (R3). Tools with a real ID are deduplicated by that ID; ID-less
+          calls get unique per-occurrence fallback identities so distinct
+          same-name calls are not collapsed (R2).
         - ``step.finish`` usage is summed into input/output tokens. Missing
           usage contributes 0 (never invented).
         - A top-level ``error`` event raises :class:`AgentOutputError`.
@@ -588,9 +622,12 @@ class OpenCodeAgentAdapter:
         :class:`AgentOutputError`.
         """
         # id -> (tool_name, completed); insertion-ordered. Both tool.finish and
-        # message.finish tool parts write here (message.finish is authoritative,
-        # last write wins), so a tool seen in both events is counted once.
+        # assistant message.finish tool parts write here (message.finish is
+        # authoritative, last write wins), so a tool with a real ID seen in both
+        # events is counted once. ID-less calls get unique per-occurrence
+        # fallback keys so distinct same-name calls are not collapsed (R2).
         tools: dict[str, tuple[str, bool]] = {}
+        noid_seq: list[int] = [0]  # mutable counter for per-occurrence fallback IDs
         message_final_text: str | None = None
         text_parts: list[str] = []
         input_tokens = USAGE_UNAVAILABLE
@@ -622,13 +659,13 @@ class OpenCodeAgentAdapter:
                 if isinstance(text, str):
                     text_parts.append(text)
             elif rtype == "tool.finish":
-                self._record_tool(record, tools)
+                self._record_tool(record, tools, noid_seq)
             elif rtype == "step.finish":
                 it, ot = _extract_usage(record)
                 input_tokens += it
                 output_tokens += ot
             elif rtype == "message.finish":
-                msg_text = self._process_message_finish(record, tools)
+                msg_text = self._process_message_finish(record, tools, noid_seq)
                 if msg_text is not None:
                     message_final_text = msg_text
 
@@ -664,24 +701,39 @@ class OpenCodeAgentAdapter:
             output_tokens=output_tokens,
         )
 
-    def _record_tool(self, record: dict[str, Any], tools: dict[str, tuple[str, bool]]) -> None:
-        """Record a ``tool.finish`` event's tool name + completed state."""
+    def _record_tool(
+        self,
+        record: dict[str, Any],
+        tools: dict[str, tuple[str, bool]],
+        noid_seq: list[int],
+    ) -> None:
+        """Record a ``tool.finish`` event's tool name + completed state.
+
+        Tools with a real ID are deduplicated by that ID (last write wins). An
+        ID-less call gets a unique per-occurrence fallback key so distinct
+        same-name calls are not collapsed into one (R2).
+        """
         name = record.get("tool")
         if not isinstance(name, str) or not name:
             return
         tid = record.get("id")
         if not isinstance(tid, str) or not tid:
-            tid = name
+            tid = _noid_key(noid_seq)
         tools[tid] = (name, _tool_completed(record))
 
     def _process_message_finish(
-        self, record: dict[str, Any], tools: dict[str, tuple[str, bool]]
+        self,
+        record: dict[str, Any],
+        tools: dict[str, tuple[str, bool]],
+        noid_seq: list[int],
     ) -> str | None:
         """Extract assistant text and tool parts from a ``message.finish`` event.
 
         Returns the concatenated assistant text (``""`` if an assistant message
         has no text parts, so a final tool-only message triggers missing-text),
-        or ``None`` for a non-assistant message (leaving the prior value).
+        or ``None`` for a non-assistant message (leaving the prior value). Tool
+        parts are counted only from assistant messages (R3): a user/tool/system
+        message may echo tool calls but those are not agent-initiated.
         """
         message = record.get("message")
         if not isinstance(message, dict):
@@ -690,6 +742,7 @@ class OpenCodeAgentAdapter:
         parts = message.get("parts")
         if not isinstance(parts, list):
             return None
+        is_assistant = role == "assistant"
         texts: list[str] = []
         for part in parts:
             if not isinstance(part, dict):
@@ -699,15 +752,15 @@ class OpenCodeAgentAdapter:
                 text = part.get("text")
                 if isinstance(text, str):
                     texts.append(text)
-            elif ptype == "tool":
+            elif ptype == "tool" and is_assistant:
                 name = part.get("tool")
                 if isinstance(name, str) and name:
                     tid = part.get("id")
                     if not isinstance(tid, str) or not tid:
-                        tid = name
+                        tid = _noid_key(noid_seq)
                     # message.finish tool parts are authoritative (last write).
                     tools[tid] = (name, _tool_completed(part))
-        if role == "assistant":
+        if is_assistant:
             return "".join(texts)
         return None
 
@@ -804,21 +857,22 @@ class OpenCodeAgentAdapter:
     def _redact_command(self, argv: list[str]) -> list[str]:
         """Return a redacted copy of argv for audit (prompt content hidden).
 
-        The prompt (after ``--``) is replaced with a length placeholder. The
-        model, ``--dir`` path, and flags are non-secret and preserved. MCP config
-        content is never in argv (it travels via the env override), so it cannot
-        leak here.
+        The adapter-owned prompt separator is the LAST ``--`` in argv:
+        :meth:`build_command` always appends ``["--", composed_prompt]`` as the
+        final elements, so a ``--`` supplied via ``extra_args`` earlier in argv
+        is not mistaken for the prompt separator (R4). The prompt is replaced
+        with a length placeholder; model, ``--dir`` path, and flags are
+        non-secret and preserved. MCP config content is never in argv (it travels
+        via the env override), so it cannot leak here.
         """
-        redacted: list[str] = []
+        last_dash = -1
         for i, arg in enumerate(argv):
             if arg == "--":
-                redacted.append(arg)
-                if i + 1 < len(argv):
-                    prompt = argv[i + 1]
-                    redacted.append(f"<prompt:{len(prompt)} chars>")
-                break
-            redacted.append(arg)
-        return redacted
+                last_dash = i
+        if last_dash == -1:
+            return list(argv)
+        prompt_len = sum(len(a) for a in argv[last_dash + 1 :])
+        return list(argv[: last_dash + 1]) + [f"<prompt:{prompt_len} chars>"]
 
 
 # --------------------------------------------------------------------------- #
@@ -829,6 +883,18 @@ class OpenCodeAgentAdapter:
 def _json_dumps(doc: dict[str, Any]) -> str:
     """Stable JSON serialization for the env override (no ASCII escaping)."""
     return json.dumps(doc, ensure_ascii=False, sort_keys=True)
+
+
+def _noid_key(noid_seq: list[int]) -> str:
+    """Return a unique per-occurrence fallback key for an ID-less tool call.
+
+    Uses a sentinel-prefixed counter so distinct ID-less calls are never
+    collapsed into one while real-ID deduplication is preserved (R2). The key is
+    internal to stream parsing and never surfaces in Runner artifacts.
+    """
+    key = f"__noid_{noid_seq[0]}__"
+    noid_seq[0] += 1
+    return key
 
 
 def _tool_completed(record: dict[str, Any]) -> bool:

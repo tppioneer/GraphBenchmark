@@ -34,6 +34,7 @@ from runner.execution import AgentAnswerStatus
 from runner.opencode_adapter import (
     DEFAULT_AGENT_MODEL,
     OPENCODE_CONFIG_ENV,
+    OPENCODE_DISABLE_PROJECT_CONFIG_ENV,
     AgentAdapterError,
     AgentLaunchError,
     AgentNonZeroExitError,
@@ -78,6 +79,7 @@ def _opencode_mcp(
     command: tuple[str, ...] = ("node", "srv.js"),
     env: dict[str, str] | None = None,
     url: str | None = None,
+    headers: dict[str, str] | None = None,
 ) -> dict[str, Any]:
     spec: dict[str, Any] = {"type": "remote" if url else "local"}
     if url:
@@ -86,6 +88,8 @@ def _opencode_mcp(
         spec["command"] = list(command)
     if env:
         spec["env"] = env
+    if headers:
+        spec["headers"] = headers
     return {"mcp": {name: spec}}
 
 
@@ -1211,3 +1215,233 @@ def test_execute_run_integration_failure_is_failed(tmp_path: Path) -> None:
     assert result.status is br.RunStatus.FAILED
     assert result.agent_answer_status is None
     assert not result.policy_valid
+
+
+# --------------------------------------------------------------------------- #
+# 10. AIS-013 Review 1 remediation regression tests (R1-R5)
+# --------------------------------------------------------------------------- #
+
+
+# -- R1: preserve and validate native remote MCP headers -------------------- #
+
+
+def test_r1_remote_mcp_headers_preserved(tmp_path: Path) -> None:
+    """Remote MCP headers are preserved in the normalized runtime config."""
+    gcfg = _mcp_file(
+        tmp_path,
+        "graph.json",
+        _opencode_mcp(
+            "gitnexus",
+            url="https://graph.example.com/sse",
+            headers={"Authorization": "Bearer secret-token", "X-Api-Key": "key123"},
+        ),
+    )
+    adapter = _make_adapter(tmp_path, graph_mcp_configs=(gcfg,))
+    srv = adapter.build_runtime_config("graph")["mcp"]["gitnexus"]
+    assert srv["type"] == "remote"
+    assert srv["headers"] == {"Authorization": "Bearer secret-token", "X-Api-Key": "key123"}
+
+
+def test_r1_remote_mcp_headers_delivered_via_env_not_argv(tmp_path: Path) -> None:
+    """Header values travel via the env override, never in argv or audit."""
+    secret = "Bearer sk-secret-header-xyz"
+    gcfg = _mcp_file(
+        tmp_path,
+        "graph.json",
+        _opencode_mcp("gitnexus", url="https://x/sse", headers={"Authorization": secret}),
+    )
+    adapter = _make_adapter(tmp_path, graph_mcp_configs=(gcfg,))
+    stream = _stream([_message_finish("assistant", texts=["answer"])])
+    with patch(_RUN, return_value=_completed(stream)) as mock_run:
+        adapter.execute(case_id=CASE_ID, task_type=TASK_TYPE, tool_policy="graph")
+    env = mock_run.call_args.kwargs["env"]
+    injected = json.loads(env[OPENCODE_CONFIG_ENV])
+    assert injected["mcp"]["gitnexus"]["headers"]["Authorization"] == secret
+    argv = mock_run.call_args.args[0]
+    assert secret not in " ".join(argv)
+    assert secret not in " ".join(adapter.last_command)
+    assert adapter.last_mcp_servers == ("gitnexus",)
+
+
+def test_r1_invalid_headers_type_raises_without_value_leak(tmp_path: Path) -> None:
+    """Non-dict headers raise an error that does not echo header content."""
+    bad = _mcp_file(
+        tmp_path,
+        "bad.json",
+        {
+            "mcp": {
+                "gitnexus": {
+                    "type": "remote",
+                    "url": "https://x/sse",
+                    "headers": "not-a-dict",
+                }
+            }
+        },
+    )
+    adapter = _make_adapter(tmp_path, graph_mcp_configs=(bad,))
+    with pytest.raises(AgentAdapterError, match="headers must be a JSON object"):
+        adapter.build_runtime_config("graph")
+
+
+# -- R2: per-occurrence fallback identities for id-less tool calls ---------- #
+
+
+def test_r2_idless_same_name_tools_counted_separately(tmp_path: Path) -> None:
+    """Multiple ID-less same-name tool calls are counted as distinct events."""
+    adapter = _make_adapter(tmp_path)
+    stream = _stream(
+        [
+            _tool_finish("read", id=""),
+            _tool_finish("read", id=""),
+            _tool_finish("read", id=""),
+            _message_finish("assistant", texts=["done"]),
+        ]
+    )
+    parsed = adapter._parse_stream(stream)
+    assert len(parsed.tool_events) == 3
+    assert all(e.kind is ToolKind.FILE_READ for e in parsed.tool_events)
+    assert all(e.label == "read" for e in parsed.tool_events)
+
+
+def test_r2_idless_tools_from_tool_and_message_finish(tmp_path: Path) -> None:
+    """ID-less tools from tool.finish and message.finish are counted separately."""
+    adapter = _make_adapter(tmp_path)
+    stream = _stream(
+        [
+            _tool_finish("read", id=""),
+            _message_finish(
+                "assistant",
+                texts=["done"],
+                tool_parts=[{"tool": "read", "id": ""}],
+            ),
+        ]
+    )
+    parsed = adapter._parse_stream(stream)
+    assert len(parsed.tool_events) == 2
+    assert all(e.label == "read" for e in parsed.tool_events)
+
+
+def test_r2_real_id_dedup_preserved(tmp_path: Path) -> None:
+    """Tools with a real ID are still deduplicated across events."""
+    adapter = _make_adapter(tmp_path)
+    stream = _stream(
+        [
+            _tool_finish("read", id="real-1"),
+            _message_finish(
+                "assistant",
+                texts=["done"],
+                tool_parts=[{"tool": "read", "id": "real-1"}],
+            ),
+        ]
+    )
+    parsed = adapter._parse_stream(stream)
+    assert len(parsed.tool_events) == 1
+
+
+# -- R3: ignore non-assistant message tool parts ---------------------------- #
+
+
+def test_r3_non_assistant_message_tool_parts_ignored(tmp_path: Path) -> None:
+    """Tool parts from a user message are not counted as tool events."""
+    adapter = _make_adapter(tmp_path)
+    stream = _stream(
+        [
+            _message_finish(
+                "user",
+                texts=["what tools did you use?"],
+                tool_parts=[{"tool": "read", "id": "t1"}, {"tool": "grep", "id": "t2"}],
+            ),
+            _message_finish("assistant", texts=["I used read and grep."]),
+        ]
+    )
+    parsed = adapter._parse_stream(stream)
+    assert parsed.tool_events == ()
+    assert parsed.raw_response == b"I used read and grep."
+
+
+def test_r3_assistant_message_tool_parts_still_counted(tmp_path: Path) -> None:
+    """Tool parts from an assistant message are still counted (regression guard)."""
+    adapter = _make_adapter(tmp_path)
+    stream = _stream(
+        [
+            _message_finish(
+                "assistant",
+                texts=["done"],
+                tool_parts=[{"tool": "read", "id": "t1"}],
+            ),
+        ]
+    )
+    parsed = adapter._parse_stream(stream)
+    assert len(parsed.tool_events) == 1
+    assert parsed.tool_events[0].label == "read"
+
+
+# -- R4: redact using the adapter-owned final prompt separator -------------- #
+
+
+def test_r4_redact_uses_last_separator_with_extra_args_dash(tmp_path: Path) -> None:
+    """When extra_args contains '--', the real prompt is still redacted."""
+    adapter = _make_adapter(tmp_path, extra_args=("--", "intermediate-value"))
+    argv = adapter.build_command(tool_policy="graph", prompt=PROMPT)
+    redacted = adapter._redact_command(argv)
+    redacted_str = " ".join(redacted)
+    assert PROMPT not in redacted_str
+    assert "intermediate-value" in redacted_str
+    assert "<prompt:" in redacted_str
+    assert f"<prompt:{len(PROMPT)} chars>" in redacted_str
+
+
+def test_r4_redact_prompt_hidden_in_execute_with_extra_args_dash(tmp_path: Path) -> None:
+    """End-to-end: the prompt stays hidden in last_command when extra_args has '--'."""
+    adapter = _graph_adapter(tmp_path, extra_args=("--", "passthrough"))
+    stream = _stream([_message_finish("assistant", texts=["answer"])])
+    with patch(_RUN, return_value=_completed(stream)):
+        adapter.execute(case_id=CASE_ID, task_type=TASK_TYPE, tool_policy="graph")
+    cmd_str = " ".join(adapter.last_command)
+    assert PROMPT not in cmd_str
+    assert "passthrough" in cmd_str
+    assert "<prompt:" in cmd_str
+
+
+# -- R5: OPENCODE_DISABLE_PROJECT_CONFIG in child-only env ------------------ #
+
+
+def test_r5_disable_project_config_set_in_child_env(tmp_path: Path) -> None:
+    """OPENCODE_DISABLE_PROJECT_CONFIG=true is set in the child env."""
+    adapter = _graph_adapter(tmp_path)
+    stream = _stream([_message_finish("assistant", texts=["answer"])])
+    with patch(_RUN, return_value=_completed(stream)) as mock_run:
+        adapter.execute(case_id=CASE_ID, task_type=TASK_TYPE, tool_policy="graph")
+    env = mock_run.call_args.kwargs["env"]
+    assert env[OPENCODE_DISABLE_PROJECT_CONFIG_ENV] == "true"
+
+
+def test_r5_child_env_inherits_parent_and_does_not_modify_it(tmp_path: Path) -> None:
+    """Child env inherits parent env (Provider auth) and parent is not written back."""
+    adapter = _graph_adapter(tmp_path)
+    stream = _stream([_message_finish("assistant", texts=["answer"])])
+    marker = "AIS013_R5_MARKER"
+    with patch.dict(os.environ, {marker: "inherited"}, clear=False):
+        assert OPENCODE_DISABLE_PROJECT_CONFIG_ENV not in os.environ
+        with patch(_RUN, return_value=_completed(stream)) as mock_run:
+            adapter.execute(case_id=CASE_ID, task_type=TASK_TYPE, tool_policy="graph")
+        # Parent env was not modified by the adapter.
+        assert OPENCODE_DISABLE_PROJECT_CONFIG_ENV not in os.environ
+        env = mock_run.call_args.kwargs["env"]
+    # Child env inherited the parent marker (Provider auth inheritance proof).
+    assert env[marker] == "inherited"
+    assert env[OPENCODE_DISABLE_PROJECT_CONFIG_ENV] == "true"
+
+
+def test_r5_deny_by_default_permissions_retained(tmp_path: Path) -> None:
+    """The inline deny-by-default permission policy is still in the config."""
+    adapter = _graph_adapter(tmp_path)
+    stream = _stream([_message_finish("assistant", texts=["answer"])])
+    with patch(_RUN, return_value=_completed(stream)) as mock_run:
+        adapter.execute(case_id=CASE_ID, task_type=TASK_TYPE, tool_policy="graph")
+    env = mock_run.call_args.kwargs["env"]
+    injected = json.loads(env[OPENCODE_CONFIG_ENV])
+    perm = injected["permission"]
+    assert perm["read"] == "allow"
+    for denied in ("grep", "glob", "list", "bash", "edit", "webfetch"):
+        assert perm[denied] == "deny"

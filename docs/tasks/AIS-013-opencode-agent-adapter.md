@@ -1,6 +1,6 @@
 # AIS-013: OpenCode AgentAdapter
 
-State: CHANGES_REQUIRED
+State: READY_FOR_REVIEW
 
 ## Objective
 
@@ -74,3 +74,9 @@ Implement a concrete `OpenCodeAgentAdapter` for the Runner so an experiment can 
 - Verdict: `PASS_WITH_NOTES`, treated as `CHANGES_REQUIRED` because four findings are reproducible implementation defects.
 - Accepted remediation: preserve validated remote MCP headers; count distinct id-less tool calls; ignore tool parts from non-assistant messages; redact the adapter-owned prompt separator correctly; set the supported project-config-disable environment guard for stronger isolation.
 - Deferred live-contract risks: real OpenCode NDJSON shapes, per-step versus cumulative token semantics, and actual permission behavior under `--auto` require a separately authorized bounded live model probe.
+
+## Remediation 1 result
+
+- Commit: `cff1a88890229bcfb39aab7ba21c61f8fac94ac3`, based on `425caa27316bf5bcce47607a2ce6bff03ecd440a`.
+- AIS013-R1 through AIS013-R5 resolved with regression tests; only the two allowed files changed.
+- Verification: 96 focused tests, 917 full-suite tests, Ruff format/check, and diff check passed. Worktree clean.

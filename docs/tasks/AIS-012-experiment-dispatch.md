@@ -6,6 +6,10 @@ State: INTEGRATED
 
 Add a configuration-driven dispatch layer that loads an experiment YAML, validates its Case/GT and execution conditions, constructs `ClaudeCodeAgentAdapter` instances, and invokes the existing `execute_run` lifecycle for declared Graph/Grep conditions and repeats.
 
+## Runtime path decision
+
+Formal experiment YAML runtime fields use absolute local paths for the target repository, MCP JSON files, Skill/Plugin inputs and run output root. These resources remain outside the Benchmark repository; the YAML carries paths only and never carries Claude credentials or secret values. The current smoke YAML remains non-executable and is not converted into a machine-specific formal configuration.
+
 ## Fixed base
 
 - Base: `8a227d795d1a9468838d47129c43afb0804a41c9`

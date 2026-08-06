@@ -1,6 +1,6 @@
 # AIS-012: 端到端冻结并执行正式实验
 
-State: READY_FOR_REVIEW
+State: VERIFIED
 
 ## Execution
 

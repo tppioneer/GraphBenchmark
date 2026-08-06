@@ -191,6 +191,22 @@ def _full_runtime(tmp_path: Path) -> dict[str, Any]:
     }
 
 
+FORMAL_GRAPH_SKILL_TEXT_MARKER = "Graph tool usage guide."
+
+
+def _full_runtime_with_skill(tmp_path: Path) -> dict[str, Any]:
+    """A full runtime that also configures a Graph Skill file.
+
+    Used to verify Skill isolation: the skill is a Graph-tool resource that
+    must reach Graph (and Mixed) runs but never a Grep run (AIS-012, F2).
+    """
+    rt = _full_runtime(tmp_path)
+    skill = tmp_path / "graph-skill.md"
+    skill.write_text(FORMAL_GRAPH_SKILL_TEXT_MARKER, encoding="utf-8")
+    rt["skill_file"] = str(skill)
+    return rt
+
+
 class FakeAdapter:
     """A minimal AgentAdapter that records calls and returns a fixed outcome."""
 
@@ -489,6 +505,17 @@ class TestFormalConfig:
         assert graph_adapter._select_mcp_configs("graph") == (
             str(FORMAL_GRAPH_MCP),
         )
+        # Skill isolation (AIS-012, F2): the Graph run receives the configured
+        # Graph Skill; the Grep run receives no skill at all, so the Graph
+        # Skill text cannot contaminate the Grep baseline.
+        assert graph_adapter._skill_text == FORMAL_GRAPH_SKILL.read_text(encoding="utf-8")
+        assert grep_adapter._skill_text is None
+        # The constructed commands reflect the isolation: Graph injects the
+        # skill via --append-system-prompt; Grep does not.
+        graph_argv = graph_adapter.build_command(tool_policy="graph", prompt="prompt")
+        grep_argv = grep_adapter.build_command(tool_policy="grep", prompt="prompt")
+        assert "--append-system-prompt" in graph_argv
+        assert "--append-system-prompt" not in grep_argv
         # No subprocess launched: execute() was never called.
         assert graph_adapter.last_command == []
         assert grep_adapter.last_command == []
@@ -1254,6 +1281,132 @@ class TestGraphGrepIsolation:
         assert mixed_adapter._select_mcp_configs("mixed") == (
             str(graph_mcp), str(grep_mcp),
         )
+
+
+# --------------------------------------------------------------------------- #
+# Graph/Grep Skill isolation in the default adapter factory (AIS-012, F2)
+# --------------------------------------------------------------------------- #
+
+
+class TestGraphGrepSkillIsolation:
+    """The configured Graph Skill reaches Graph/Mixed runs only, never Grep.
+
+    The config contract has one global ``skill_file``/``skill_text`` field.
+    The dispatcher's default factory applies it Graph-only: a Graph (or Mixed)
+    run receives the skill; a Grep run receives no skill at all, so the Graph
+    Skill text cannot contaminate the Grep baseline (F2).
+    """
+
+    def test_graph_run_receives_configured_skill(self, tmp_path: Path) -> None:
+        from runner.experiment_dispatch import _default_adapter_factory
+
+        case = _write_case(tmp_path)
+        gt = _write_gt(tmp_path)
+        rt = _full_runtime_with_skill(tmp_path)
+        cfg = _write_config(tmp_path, case_path=case, gt_path=gt, runtime=rt)
+        config = load_experiment_config(cfg)
+        plan = build_dispatch_plan(config)
+
+        graph_adapter = _default_adapter_factory(plan.runs[0], plan)
+        # Positive: the Graph run's adapter carries the Graph Skill text.
+        assert graph_adapter._skill_text == FORMAL_GRAPH_SKILL_TEXT_MARKER
+        argv = graph_adapter.build_command(tool_policy="graph", prompt="p")
+        assert "--append-system-prompt" in argv
+        idx = argv.index("--append-system-prompt")
+        assert argv[idx + 1] == FORMAL_GRAPH_SKILL_TEXT_MARKER
+
+    def test_grep_run_receives_no_skill(self, tmp_path: Path) -> None:
+        """Negative (F2): a Grep run is built without the global Graph Skill."""
+        from runner.experiment_dispatch import _default_adapter_factory
+
+        case = _write_case(tmp_path)
+        gt = _write_gt(tmp_path)
+        rt = _full_runtime_with_skill(tmp_path)
+        cfg = _write_config(tmp_path, case_path=case, gt_path=gt, runtime=rt)
+        config = load_experiment_config(cfg)
+        plan = build_dispatch_plan(config)
+
+        grep_adapter = _default_adapter_factory(plan.runs[1], plan)
+        # The Grep run's adapter carries no skill, even though the config
+        # declares a global Graph Skill.
+        assert grep_adapter._skill_text is None
+        argv = grep_adapter.build_command(tool_policy="grep", prompt="p")
+        assert "--append-system-prompt" not in argv
+
+    def test_inline_skill_text_is_also_suppressed_for_grep(self, tmp_path: Path) -> None:
+        """Inline ``skill_text`` (not just ``skill_file``) is Graph-only."""
+        from runner.experiment_dispatch import _default_adapter_factory
+
+        case = _write_case(tmp_path)
+        gt = _write_gt(tmp_path)
+        rt = _full_runtime(tmp_path)
+        rt["skill_text"] = "inline graph skill"
+        cfg = _write_config(tmp_path, case_path=case, gt_path=gt, runtime=rt)
+        config = load_experiment_config(cfg)
+        plan = build_dispatch_plan(config)
+
+        graph_adapter = _default_adapter_factory(plan.runs[0], plan)
+        grep_adapter = _default_adapter_factory(plan.runs[1], plan)
+        assert graph_adapter._skill_text == "inline graph skill"
+        assert grep_adapter._skill_text is None
+
+    def test_mixed_run_receives_skill(self, tmp_path: Path) -> None:
+        """A Mixed run has Graph tool access, so it receives the skill."""
+        from runner.experiment_dispatch import _default_adapter_factory
+
+        case = _write_case(tmp_path)
+        gt = _write_gt(tmp_path)
+        rt = _full_runtime_with_skill(tmp_path)
+        cfg = _write_config(
+            tmp_path,
+            case_path=case,
+            gt_path=gt,
+            runtime=rt,
+            conditions=[
+                {"id": "graph", "tool_policy": "graph"},
+                {"id": "grep", "tool_policy": "grep"},
+                {"id": "mixed", "tool_policy": "mixed"},
+            ],
+        )
+        config = load_experiment_config(cfg)
+        plan = build_dispatch_plan(config)
+
+        graph_adapter = _default_adapter_factory(plan.runs[0], plan)
+        grep_adapter = _default_adapter_factory(plan.runs[1], plan)
+        mixed_adapter = _default_adapter_factory(plan.runs[2], plan)
+        assert graph_adapter._skill_text == FORMAL_GRAPH_SKILL_TEXT_MARKER
+        assert mixed_adapter._skill_text == FORMAL_GRAPH_SKILL_TEXT_MARKER
+        # Only the Grep run is skill-free.
+        assert grep_adapter._skill_text is None
+
+    def test_grep_adapter_from_factory_fail_closes_if_skill_leaks(self, tmp_path: Path) -> None:
+        """Defense-in-depth: a Grep adapter carrying a skill fails closed.
+
+        The default factory never passes a skill to a Grep adapter. This test
+        constructs a Grep adapter with a skill directly (simulating a factory
+        bug or a custom factory) and verifies the adapter's own guard refuses
+        to build a command, so a contaminated Grep run cannot execute.
+        """
+        from runner.claude_code_adapter import (
+            AgentPolicyConfigError,
+            ClaudeCodeAgentAdapter,
+            ToolNamePatterns,
+        )
+
+        repo_dir = tmp_path / "repo"
+        repo_dir.mkdir()
+        adapter = ClaudeCodeAgentAdapter(
+            prompt="p",
+            case_id=CASE_ID,
+            task_type=TASK_TYPE,
+            agent_model="glm-5.2",
+            repo_cwd=repo_dir,
+            cli_path="claude",
+            skill_text="leaked graph skill",
+            tool_name_patterns=ToolNamePatterns(graph=()),
+        )
+        with pytest.raises(AgentPolicyConfigError, match="Grep policy.*skill"):
+            adapter.build_command(tool_policy="grep", prompt="p")
 
 
 # --------------------------------------------------------------------------- #

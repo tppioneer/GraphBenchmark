@@ -17,7 +17,11 @@ Design invariants (see docs/ai-scoring-design.md S8.6-8.8, S15, S17-18, S20):
   :class:`ClaudeCodeAgentAdapter` with ONLY the MCP configs matching its
   ``tool_policy``. A Graph run receives only ``graph_mcp_configs``; a Grep
   run receives only ``grep_mcp_configs`` (the adapter fails closed if Graph
-  configs leak into a Grep run).
+  configs leak into a Grep run). The configured skill is likewise injected
+  only into runs whose policy grants Graph tool access (graph, mixed); a
+  Grep run receives no skill, so the Graph Skill text cannot contaminate the
+  Grep baseline (AIS-012, F2). The adapter fail-closes if a skill reaches a
+  Grep run regardless.
 * The natural-language agent answer flows unchanged through
   :mod:`runner.execution`; the dispatcher never fabricates answer JSON,
   metrics, or Judge results. It collects :class:`RunResult` objects and
@@ -913,6 +917,12 @@ def _default_adapter_factory(
     receives only ``graph_mcp_configs``; a Grep run receives only
     ``grep_mcp_configs``; a Mixed run receives both.
 
+    Skill isolation (AIS-012, F2): the configured skill is injected only into
+    runs whose policy grants Graph tool access (graph, mixed); a Grep run
+    receives no skill (``skill_text``/``skill_file`` are suppressed), so the
+    Graph Skill text cannot contaminate the Grep baseline. The adapter
+    fail-closes if a skill ever reaches a Grep run regardless.
+
     For Grep runs the default Graph tool-name patterns
     (``(^mcp__gitnexus,)``) are explicitly cleared. The adapter fails closed
     in ``_select_mcp_configs`` if any Graph tool-name patterns are configured
@@ -940,6 +950,22 @@ def _default_adapter_factory(
     else:
         raise DispatchError(f"unknown tool_policy: {run.tool_policy!r}")
 
+    # Skill isolation (AIS-012, F2): the configured skill is the Graph Skill,
+    # a Graph-tool resource. Inject it only into runs whose policy grants
+    # Graph tool access (graph, mixed); a Grep run receives no skill input at
+    # all, so the Graph Skill text cannot contaminate the Grep baseline. This
+    # mirrors the per-policy MCP selection above, and the adapter fail-closes
+    # if a skill ever reaches a Grep run (see build_command). The config
+    # contract keeps a single global ``skill_file``/``skill_text`` field; the
+    # dispatcher applies it Graph-only rather than relying on a global
+    # resource reaching Grep.
+    if run.tool_policy == "grep":
+        skill_text: str | None = None
+        skill_file: Path | None = None
+    else:  # graph or mixed
+        skill_text = runtime.skill_text
+        skill_file = runtime.skill_file
+
     return ClaudeCodeAgentAdapter(
         prompt=plan.case_prompt,
         case_id=run.identity.case_id,
@@ -949,8 +975,8 @@ def _default_adapter_factory(
         graph_mcp_configs=graph_mcp,
         grep_mcp_configs=grep_mcp,
         plugin_dirs=runtime.plugin_dirs,
-        skill_text=runtime.skill_text,
-        skill_file=runtime.skill_file,
+        skill_text=skill_text,
+        skill_file=skill_file,
         permission_mode=runtime.permission_mode,
         tool_name_patterns=tool_name_patterns,
     )

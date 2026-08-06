@@ -10,9 +10,12 @@ inspects secrets, and never relies on the agent's self-report for tool usage.
 Graph/Grep isolation (S15.1): the adapter selects MCP configs based on the
 declared tool_policy. Graph policy receives only its configured Graph MCP set;
 Grep policy fails closed if any Graph MCP configs or Graph tool-name patterns
-are configured (a configuration error, not a run). The separation is auditable
-from the constructed command argv (stored redacted on the instance after each
-call via last_command).
+are configured (a configuration error, not a run). Grep policy also fails
+closed if a skill is configured, so no skill text is injected into the Grep
+baseline (AIS-012, F2); the default dispatch factory suppresses the skill for
+Grep runs, and this guard makes the isolation robust at command-construction
+time. The separation is auditable from the constructed command argv (stored
+redacted on the instance after each call via last_command).
 
 Skill/plugin inputs: there is no --skill flag in Claude Code 2.1.220. Explicit
 skill content is injected via --append-system-prompt (a documented, safe
@@ -156,7 +159,8 @@ class ClaudeCodeAgentAdapter:
     tool-name classification) because AgentAdapter.execute receives only
     case_id/task_type/tool_policy. The tool_policy argument selects which MCP
     configs are passed to the CLI, enforcing Graph/Grep isolation at
-    command-construction time.
+    command-construction time. A Grep run also fails closed if a skill is
+    configured, so no skill text contaminates the Grep baseline (AIS-012, F2).
 
     All failures (nonzero exit, timeout, launch failure, malformed/empty output,
     invalid paths, invalid policy config) raise an AgentAdapterError subclass so
@@ -321,6 +325,20 @@ class ClaudeCodeAgentAdapter:
             args.extend(["--plugin-dir", plugin_dir])
 
         if self._skill_text:
+            # Skill isolation (AIS-012, F2): a Grep-baseline run must receive
+            # no skill injection. Fail closed if a skill is configured for a
+            # Grep run, mirroring the Graph-MCP guard in _select_mcp_configs.
+            # The default dispatch factory prevents this by not passing a
+            # skill to Grep adapters; this guard enforces isolation at the
+            # command-construction layer too, so a misconfigured Grep run
+            # fails fast into a truthful failed run rather than executing
+            # with a contaminated baseline.
+            if tool_policy == "grep":
+                raise AgentPolicyConfigError(
+                    "Grep policy must not be configured with a skill; "
+                    "fail-closed to prevent skill injection into the Grep "
+                    "baseline"
+                )
             args.extend(["--append-system-prompt", self._skill_text])
 
         args.extend(self._extra_args)

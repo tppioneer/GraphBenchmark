@@ -305,6 +305,41 @@ def test_grep_policy_fail_closed_with_graph_patterns(tmp_path: Path) -> None:
         adapter._select_mcp_configs("grep")
 
 
+def test_grep_policy_fail_closed_with_skill(tmp_path: Path) -> None:
+    """Grep with a configured skill fails closed: no skill injection (F2)."""
+    adapter = _make_adapter(
+        tmp_path,
+        skill_text="Graph skill text.",
+        tool_name_patterns=ToolNamePatterns(graph=()),
+    )
+    with pytest.raises(AgentPolicyConfigError, match="Grep policy.*skill"):
+        adapter.build_command(tool_policy="grep", prompt=PROMPT)
+
+
+def test_grep_execute_with_skill_fail_closed_no_launch(tmp_path: Path) -> None:
+    """Grep + skill raises before any subprocess launch (F2)."""
+    adapter = _make_adapter(
+        tmp_path,
+        skill_text="Graph skill text.",
+        tool_name_patterns=ToolNamePatterns(graph=()),
+    )
+    with patch(_RUN) as mock_run:
+        with pytest.raises(AgentPolicyConfigError, match="skill"):
+            adapter.execute(
+                case_id=CASE_ID, task_type=TASK_TYPE, tool_policy="grep"
+            )
+    mock_run.assert_not_called()
+
+
+def test_grep_policy_no_skill_has_no_append_system_prompt(
+    tmp_path: Path,
+) -> None:
+    """A Grep run with no skill has no --append-system-prompt in argv (F2)."""
+    adapter = _make_adapter(tmp_path, tool_name_patterns=ToolNamePatterns(graph=()))
+    argv = adapter.build_command(tool_policy="grep", prompt=PROMPT)
+    assert "--append-system-prompt" not in argv
+
+
 def test_grep_policy_succeeds_with_no_graph_config(tmp_path: Path) -> None:
     adapter = _make_adapter(tmp_path, tool_name_patterns=ToolNamePatterns(graph=()))
     configs = adapter._select_mcp_configs("grep")

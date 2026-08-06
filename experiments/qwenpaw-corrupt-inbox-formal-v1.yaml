@@ -57,8 +57,12 @@ notes:
     and has its Graph tool-name patterns cleared, failing closed if any Graph
     MCP leaks in). grep_mcp_configs is empty: Grep has no Graph MCP input.
   - >-
-    The Graph Skill (skill_file) is the config contract's single global skill
-    input, injected via --append-system-prompt. Graph runs receive the Graph
-    MCP set and this skill; Grep runs receive an empty MCP set, so no Graph
-    tool call is possible regardless of the skill text. This task is dry-run
+    Graph/Grep Skill isolation: the configured Graph Skill (skill_file) is a
+    Graph-tool resource. The dispatcher's default adapter factory injects it
+    only into Graph runs (graph policy); a Grep run receives no skill input at
+    all (no --append-system-prompt), so the Graph Skill text cannot
+    contaminate the Grep baseline. The adapter fail-closes if a skill ever
+    reaches a Grep run. The config contract keeps a single global skill_file
+    field; isolation is enforced by the dispatcher applying it Graph-only,
+    not by relying on that global resource reaching Grep. This task is dry-run
     only, so no subprocess is launched and no skill is applied to any run.

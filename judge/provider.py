@@ -501,6 +501,27 @@ class ClaudeCodeCliProvider(JudgeProvider):
             raise JudgeOutputError(f"invalid JSON: {exc}") from exc
         if not isinstance(parsed, dict):
             raise JudgeOutputError(f"expected JSON object, got {type(parsed).__name__}")
+
+        # --output-format json wraps the assistant's text in a result object.
+        # The judge output JSON is inside the "result" field as a string.
+        if parsed.get("type") == "result" and isinstance(parsed.get("result"), str):
+            result_text = parsed["result"].strip()
+            # The model may wrap JSON in a markdown code fence.
+            if result_text.startswith("```"):
+                lines = result_text.splitlines()
+                if len(lines) >= 2:
+                    end = -1 if lines[-1].strip() == "```" else None
+                    result_text = "\n".join(lines[1:end])
+                    result_text = result_text.strip()
+            try:
+                inner = json.loads(result_text)
+            except json.JSONDecodeError as exc:
+                raise JudgeOutputError(
+                    f"invalid JSON in result field: {exc}"
+                ) from exc
+            if isinstance(inner, dict):
+                return inner
+
         return parsed
 
     @property

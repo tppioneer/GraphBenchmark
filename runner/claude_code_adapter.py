@@ -68,9 +68,11 @@ __all__ = [
 
 DEFAULT_AGENT_MODEL = "glm-5.2"
 DEFAULT_PERMISSION_MODE = "bypassPermissions"
-DEFAULT_TIMEOUT_SECONDS = 600.0
+DEFAULT_TIMEOUT_SECONDS = 1200.0
 
 USAGE_UNAVAILABLE = 0
+
+_CMD_EXE_RE = re.compile(r'"([^"]*\.exe)"', re.IGNORECASE)
 
 
 class AgentAdapterError(Exception):
@@ -600,8 +602,51 @@ class ClaudeCodeAgentAdapter:
         shutil.which skips it in favour of a PATHEXT-matching file. Returns
         ``"claude"`` as a fallback when nothing is found, so the eventual
         launch failure surfaces as an AgentLaunchError at run time.
+
+        On Windows, shutil.which may return a ``.CMD`` npm wrapper that invokes
+        the real ``.exe`` via ``cmd.exe``.  When ``subprocess.run`` launches the
+        ``.CMD``, ``cmd.exe`` interprets special characters in arguments (e.g.
+        ``|``, ``>``, ``%`` in the skill text), causing an immediate exit code 1.
+        When a ``.CMD``/``.BAT`` wrapper is found, resolve the actual ``.exe``
+        it wraps and return that path directly so the batch processor is
+        bypassed.
         """
-        return shutil.which("claude") or "claude"
+        found = shutil.which("claude")
+        if not found:
+            return "claude"
+        if found.lower().endswith((".cmd", ".bat")):
+            resolved = ClaudeCodeAgentAdapter._resolve_cmd_wrapper(found)
+            if resolved:
+                return resolved
+        return found
+
+    @staticmethod
+    def _resolve_cmd_wrapper(cmd_path: str) -> str | None:
+        """Parse a ``.CMD``/``.BAT`` wrapper to find the real ``.exe`` path.
+
+        npm installs a ``.CMD`` shim alongside the package; the shim resolves
+        ``%dp0%`` to its own directory and calls ``...\\bin\\claude.exe %*``.
+        This method extracts that ``.exe`` path, resolves it relative to the
+        wrapper directory, and returns it if the file exists.  Returns
+        ``None`` if parsing fails so the caller falls back to the wrapper.
+        """
+        try:
+            text = Path(cmd_path).read_text(encoding="utf-8", errors="replace")
+        except OSError:
+            return None
+        wrapper_dir = Path(cmd_path).resolve().parent
+        for line in text.splitlines():
+            match = _CMD_EXE_RE.search(line)
+            if match:
+                spec = match.group(1)
+                spec = spec.replace("%dp0%", str(wrapper_dir))
+                spec = spec.replace("%~dp0", str(wrapper_dir))
+                exe_path = Path(spec)
+                if not exe_path.is_absolute():
+                    exe_path = wrapper_dir / exe_path
+                if exe_path.is_file():
+                    return str(exe_path)
+        return None
 
     # -- Redaction (S13.6: no prompt/secret content in audit logs) ---------- #
 

@@ -760,6 +760,39 @@ def test_argv_uses_subprocess_argv_not_shell(tmp_path: Path) -> None:
     assert "hello; rm -rf /" in argv
 
 
+def test_resolve_cmd_wrapper_finds_exe(tmp_path: Path) -> None:
+    """_resolve_cmd_wrapper extracts the real .exe from a .CMD shim."""
+    from runner.claude_code_adapter import ClaudeCodeAgentAdapter
+
+    # Create a fake .exe
+    pkg_dir = tmp_path / "node_modules" / "@anthropic-ai" / "claude-code" / "bin"
+    pkg_dir.mkdir(parents=True)
+    exe_path = pkg_dir / "claude.exe"
+    exe_path.write_bytes(b"\x00")
+
+    # Create a .CMD wrapper mimicking the npm shim
+    cmd_path = tmp_path / "claude.CMD"
+    cmd_path.write_text(
+        '@ECHO off\r\nSETLOCAL\r\nSET dp0=%~dp0\r\n'
+        '"%dp0%\\node_modules\\@anthropic-ai\\claude-code\\bin\\claude.exe"   %*\r\n',
+        encoding="utf-8",
+    )
+
+    resolved = ClaudeCodeAgentAdapter._resolve_cmd_wrapper(str(cmd_path))
+    assert resolved is not None
+    assert Path(resolved).name == "claude.exe"
+    assert Path(resolved).is_file()
+
+
+def test_resolve_cmd_wrapper_returns_none_for_plain_text(tmp_path: Path) -> None:
+    """A .CMD with no .exe reference returns None (caller falls back)."""
+    from runner.claude_code_adapter import ClaudeCodeAgentAdapter
+
+    cmd_path = tmp_path / "weird.CMD"
+    cmd_path.write_text("@echo hello\r\n", encoding="utf-8")
+    assert ClaudeCodeAgentAdapter._resolve_cmd_wrapper(str(cmd_path)) is None
+
+
 # --------------------------------------------------------------------------- #
 # 7. Runner compatibility (execute_run integration)
 # --------------------------------------------------------------------------- #

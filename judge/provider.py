@@ -310,8 +310,11 @@ class ClaudeCodeCliProvider(JudgeProvider):
             self._effective_model = UNVERIFIABLE_MODEL
 
         if "--json-schema" in self._supported_flags:
-            schema = _build_output_schema()
-            args.extend(["--json-schema", json.dumps(schema)])
+            # CLI 2.1.223+ rejects the draft-2020-12 $schema URI.  The
+            # provider validates the JSON output independently, so the
+            # --json-schema flag is not required and is skipped to avoid
+            # a version-dependent exit-code-1.
+            pass
 
         if "--dangerously-skip-permissions" in self._supported_flags:
             args.append("--dangerously-skip-permissions")

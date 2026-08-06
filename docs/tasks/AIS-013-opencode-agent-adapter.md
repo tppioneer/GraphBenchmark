@@ -1,6 +1,6 @@
 # AIS-013: OpenCode AgentAdapter
 
-State: VERIFIED
+State: INTEGRATED
 
 ## Objective
 
@@ -86,3 +86,9 @@ Implement a concrete `OpenCodeAgentAdapter` for the Runner so an experiment can 
 - Verdict: `PASS_WITH_NOTES` from an independent Claude Code (`glm-5.2`) review of the cumulative range `09ef16d4367857960732d4cda1af3a3e7fb4f352..cff1a88890229bcfb39aab7ba21c61f8fac94ac3`.
 - Protocol conformance, Windows subprocess handling, JSON parsing, tool/token accounting, MCP isolation, R1-R5 remediation, strict scope, focused/full tests, Ruff, and diff checks all passed.
 - Deferred note: stderr redaction may not cover every JSON-quoted or Bearer-token form if OpenCode echoes `OPENCODE_CONFIG_CONTENT`; this is reserved for authorized live testing and is not an integration blocker.
+
+## Integration result
+
+- Integrated commits: `d11db0c` (implementation) and `2f222a0` (R1-R5 remediation).
+- Main-branch verification: 96 focused tests and 938 full-suite tests passed.
+- No live OpenCode/provider/model call was performed; remaining runtime-contract risks are reserved for user-authorized measurement.

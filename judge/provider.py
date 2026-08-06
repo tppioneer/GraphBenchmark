@@ -24,9 +24,10 @@ import dataclasses
 import json
 import os
 import re
+import shutil
 import subprocess
-import sys
 import time
+from pathlib import Path
 from typing import Any, Mapping
 
 # --- Constants ------------------------------------------------------------- #
@@ -49,6 +50,9 @@ DEFAULT_JUDGE_TIMEOUT_MS = 300000
 
 #: Sentinel value for "effective model cannot be verified" (R1).
 UNVERIFIABLE_MODEL = "unverifiable"
+
+#: Regex to extract the real ``.exe`` path from a ``.CMD``/``.BAT`` wrapper.
+_CMD_EXE_RE = re.compile(r'"([^"]*\.exe)"', re.IGNORECASE)
 
 #: Patterns whose matches in output are replaced with ``<REDACTED>``.
 #: Patterns whose matches in output are replaced with ``<REDACTED>``.
@@ -211,7 +215,7 @@ class ClaudeCodeCliProvider(JudgeProvider):
                 timeout=30,
             )
             help_text = result.stdout + result.stderr
-        except (FileNotFoundError, subprocess.TimeoutExpired, PermissionError) as exc:
+        except (OSError, subprocess.TimeoutExpired) as exc:
             raise JudgeProviderError(
                 f"cannot probe claude CLI: {exc}"
             ) from exc
@@ -250,11 +254,43 @@ class ClaudeCodeCliProvider(JudgeProvider):
 
     @staticmethod
     def _find_claude() -> str:
-        if sys.platform == "win32":
-            where = os.popen("where claude 2>nul").read().strip()
-            if where:
-                return where.splitlines()[0]
-        return "claude"
+        """Locate the claude executable.
+
+        Uses ``shutil.which`` (PATHEXT-aware on Windows) instead of the raw
+        ``where`` command so the extensionless npm shim that raises WinError
+        193 is skipped.  When a ``.CMD``/``.BAT`` wrapper is found, resolve
+        the real ``.exe`` it wraps so ``cmd.exe`` does not interpret special
+        characters in CLI arguments (e.g. the Judge prompt).
+        """
+        found = shutil.which("claude")
+        if not found:
+            return "claude"
+        if found.lower().endswith((".cmd", ".bat")):
+            resolved = ClaudeCodeCliProvider._resolve_cmd_wrapper(found)
+            if resolved:
+                return resolved
+        return found
+
+    @staticmethod
+    def _resolve_cmd_wrapper(cmd_path: str) -> str | None:
+        """Parse a ``.CMD``/``.BAT`` wrapper to find the real ``.exe`` path."""
+        try:
+            text = Path(cmd_path).read_text(encoding="utf-8", errors="replace")
+        except OSError:
+            return None
+        wrapper_dir = Path(cmd_path).resolve().parent
+        for line in text.splitlines():
+            match = _CMD_EXE_RE.search(line)
+            if match:
+                spec = match.group(1)
+                spec = spec.replace("%dp0%", str(wrapper_dir))
+                spec = spec.replace("%~dp0", str(wrapper_dir))
+                exe_path = Path(spec)
+                if not exe_path.is_absolute():
+                    exe_path = wrapper_dir / exe_path
+                if exe_path.is_file():
+                    return str(exe_path)
+        return None
 
     def _build_cli_args(self, params: JudgeCallParams) -> list[str]:
         args = [self._find_claude(), "--print", "--output-format", "json"]

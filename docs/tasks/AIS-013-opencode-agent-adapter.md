@@ -1,6 +1,6 @@
 # AIS-013: OpenCode AgentAdapter
 
-State: READY_FOR_REVIEW
+State: CHANGES_REQUIRED
 
 ## Objective
 
@@ -68,3 +68,9 @@ Implement a concrete `OpenCodeAgentAdapter` for the Runner so an experiment can 
 - Scope: only `runner/opencode_adapter.py` and `tests/runner/test_opencode_adapter.py` changed; the worktree is clean.
 - Verification reported by the executor: 83 focused tests and 904 full-suite tests passed; Ruff and diff checks passed.
 - No live OpenCode model, MCP, Provider authentication, or Judge call occurred.
+
+## Review 1 result
+
+- Verdict: `PASS_WITH_NOTES`, treated as `CHANGES_REQUIRED` because four findings are reproducible implementation defects.
+- Accepted remediation: preserve validated remote MCP headers; count distinct id-less tool calls; ignore tool parts from non-assistant messages; redact the adapter-owned prompt separator correctly; set the supported project-config-disable environment guard for stronger isolation.
+- Deferred live-contract risks: real OpenCode NDJSON shapes, per-step versus cumulative token semantics, and actual permission behavior under `--auto` require a separately authorized bounded live model probe.

@@ -1,6 +1,7 @@
 # IDEs and editors
 .idea/
 .vscode/
+.claude/
 *.iml
 *.ipr
 *.iws

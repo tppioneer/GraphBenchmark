@@ -1,6 +1,6 @@
 # AIS-012 formal configuration and dry-run
 
-State: VERIFIED
+State: INTEGRATED
 
 ## Objective
 
@@ -42,11 +42,21 @@ Create the machine-specific formal YAML for the approved QwenPaw case using abso
 
 ## Review note
 
-The current runtime contract has one global `skill_file` field. The dry-run verifies that Grep receives no Graph MCP, but actual execution would still inject the configured Graph Skill text into Grep unless per-condition Skill isolation is added or explicitly accepted in the execution task.
+F2 (resolved): the runtime contract's single global `skill_file` field would have
+injected the Graph Skill text into Grep during execution. This is now fixed by
+the skill-isolation subtask (integrated as `b4ca65d`): the dispatcher injects the
+skill Graph-only and the adapter fail-closes if a skill reaches a Grep run. The
+F2 execution gate is closed.
 
 ## Independent review
 
 - Review: `docs/reviews/AIS-012-formal-config-review-1.md`
 - Verdict: `PASS_WITH_NOTES`
 - No blocking implementation finding remains for the dry-run scope.
-- Before formal execution, explicitly decide whether the global Graph Skill injection into Grep is acceptable.
+- F2 (global Graph Skill injection into Grep) resolved by skill-isolation subtask.
+
+## Integration
+
+- Cherry-picked to `ai-score-v1` as `3112fee` (base `bb82f9c`).
+- Post-integration: full suite 840 passed; `ruff check` passed; `git diff --check` clean.
+- `dispatch --dry-run`: 6 planned runs (3 Graph + 3 Grep), no subprocess launched.

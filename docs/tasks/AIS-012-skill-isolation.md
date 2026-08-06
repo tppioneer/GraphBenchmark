@@ -1,6 +1,6 @@
 # AIS-012 skill isolation remediation
 
-State: VERIFIED
+State: INTEGRATED
 
 ## Objective
 
@@ -71,3 +71,12 @@ Return one `AGENT_RESULT` block with commit SHA, changed files, acceptance resul
 - Integration pending: `74ab076` and base `07d6cc4` are not ancestors of HEAD
   (`2f5c169`). The code must be integrated into `ai-score-v1` (cherry-pick or
   merge) before the formal-config F2 note can be closed.
+
+## Integration
+
+- `07d6cc4` (formal-config) cherry-picked to `ai-score-v1` as `3112fee`.
+- `74ab076` (skill-isolation) cherry-picked to `ai-score-v1` as `b4ca65d`;
+  task-card conflict resolved by keeping the controller's HEAD version.
+- Post-integration: full suite 840 passed; `ruff check` passed; `git diff --check`
+  clean; `dispatch --dry-run` plans 6 runs (3 Graph + 3 Grep).
+- F2 execution gate closed; formal-config F2 note resolved.

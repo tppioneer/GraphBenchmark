@@ -4,7 +4,7 @@ State: IMPLEMENTING
 
 ## Objective
 
-Ensure condition-specific Skill injection is isolated: Graph runs may receive the configured Graph Skill, while Grep runs must receive no Graph Skill and no Graph MCP.
+Ensure condition-specific resource injection is isolated: Graph runs may receive the configured Graph Skill and Graph MCP, while Grep runs must receive no Skill and no MCP of any kind.
 
 ## Source of truth
 
@@ -23,7 +23,7 @@ Ensure condition-specific Skill injection is isolated: Graph runs may receive th
 ## Invariants
 
 - Graph condition retains its configured Graph MCP and Graph Skill.
-- Grep condition receives neither Graph MCP nor Graph Skill.
+- Grep condition receives neither Graph MCP nor Graph Skill, and no other MCP or Skill input.
 - Existing public configuration compatibility is preserved unless a narrowly scoped schema change is required.
 - Dry-run remains side-effect free and plans exactly six runs for the formal config.
 
@@ -36,7 +36,7 @@ Ensure condition-specific Skill injection is isolated: Graph runs may receive th
 
 ## Acceptance criteria
 
-- The formal YAML expresses Graph-only Skill injection without relying on a global Skill field.
+- The formal YAML expresses Graph-only Skill/MCP injection without relying on global resources for Grep.
 - Dispatcher/adapters construct Graph and Grep inputs with the required isolation.
 - Tests cover both positive Graph Skill injection and negative Grep Skill absence.
 - Existing tests and the full suite pass.

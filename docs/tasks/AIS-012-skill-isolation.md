@@ -1,6 +1,6 @@
 # AIS-012 skill isolation remediation
 
-State: IMPLEMENTING
+State: READY_FOR_REVIEW
 
 ## Objective
 
@@ -45,3 +45,12 @@ Ensure condition-specific resource injection is isolated: Graph runs may receive
 ## Delivery contract
 
 Return one `AGENT_RESULT` block with commit SHA, changed files, acceptance results, exact checks, deviations, open questions, and risks.
+
+## Agent evidence
+
+- Implementation commit: `74ab076ba19d8a99a76bac8354a8e25564fc0999`
+- Dispatcher and adapter now enforce Graph-only Skill injection; Grep receives no Skill and no MCP.
+- Focused tests: 134 passed
+- Full suite: 840 passed
+- Formal validate-only and dry-run: passed; six runs planned, no formal execution
+- Ruff check and formatting checks: passed

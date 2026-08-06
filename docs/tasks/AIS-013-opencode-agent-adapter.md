@@ -1,6 +1,6 @@
 # AIS-013: OpenCode AgentAdapter
 
-State: IMPLEMENTING
+State: READY_FOR_REVIEW
 
 ## Objective
 
@@ -61,3 +61,10 @@ Implement a concrete `OpenCodeAgentAdapter` for the Runner so an experiment can 
 
 - One scoped implementation commit.
 - Strict `AGENT_RESULT` with base/head, changed files, acceptance evidence, exact checks, deviations, open questions, and residual risks.
+
+## Implementation result
+
+- Commit: `425caa27316bf5bcce47607a2ce6bff03ecd440a` based on the fixed `09ef16d4367857960732d4cda1af3a3e7fb4f352` revision.
+- Scope: only `runner/opencode_adapter.py` and `tests/runner/test_opencode_adapter.py` changed; the worktree is clean.
+- Verification reported by the executor: 83 focused tests and 904 full-suite tests passed; Ruff and diff checks passed.
+- No live OpenCode model, MCP, Provider authentication, or Judge call occurred.

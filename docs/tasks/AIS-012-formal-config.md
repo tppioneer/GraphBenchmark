@@ -1,6 +1,6 @@
 # AIS-012 formal configuration and dry-run
 
-State: IMPLEMENTING
+State: READY_FOR_REVIEW
 
 ## Objective
 
@@ -29,3 +29,17 @@ Create the machine-specific formal YAML for the approved QwenPaw case using abso
 - Formal YAML passes Case/GT/Profile and runtime validation.
 - Dispatcher dry-run yields 6 safe deterministic run IDs and correct Graph/Grep isolation.
 - Focused and full tests pass; no unrelated files change.
+
+## Agent evidence
+
+- Implementation commit: `07d6cc4f246eabd5bcd178c2df439421c847502b`
+- `dispatch --validate-only`: passed
+- `dispatch --dry-run`: passed; 6 planned runs (3 Graph + 3 Grep)
+- Focused formal-config tests: 11 passed
+- Dispatch/smoke tests: 82 passed
+- Full suite: 832 passed
+- Ruff and diff checks: passed
+
+## Review note
+
+The current runtime contract has one global `skill_file` field. The dry-run verifies that Grep receives no Graph MCP, but actual execution would still inject the configured Graph Skill text into Grep unless per-condition Skill isolation is added or explicitly accepted in the execution task.

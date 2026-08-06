@@ -44,6 +44,21 @@ from runner.policy_validation import RUNNER_OBSERVED_SOURCE, ToolEvent, ToolKind
 
 REPO_ROOT = Path(__file__).resolve().parent.parent.parent
 SMOKE_CONFIG = REPO_ROOT / "experiments" / "qwenpaw-corrupt-inbox-smoke-v1.yaml"
+FORMAL_CONFIG = REPO_ROOT / "experiments" / "qwenpaw-corrupt-inbox-formal-v1.yaml"
+
+# Machine-specific formal runtime inputs (absolute paths; non-secret). These are
+# asserted as parsed values; tests that touch the disk are guarded by
+# ``need_runtime_resources`` so they run on the configured host and skip
+# elsewhere.
+FORMAL_REPO_CWD = Path(r"F:\develop\codes\QwenPaw\QwenPaw")
+FORMAL_GRAPH_MCP = Path(r"F:\develop\00-codes\benchmark-runtime\mcp\.mcp.json")
+FORMAL_GRAPH_SKILL = Path(
+    r"F:\develop\00-codes\benchmark-runtime\skills\gitnexus-guide\SKILL.md"
+)
+FORMAL_RUNS_ROOT = Path(
+    r"F:\develop\00-codes\benchmark-runtime\runs\GraphBenchmark-ai-score-v1"
+)
+FORMAL_REPO_REVISION = "09fc515c88a5e817870e6b975e66b5be81893e03"
 
 CASE_ID = "test-bug-case"
 TASK_TYPE = "bug_localization"
@@ -246,6 +261,26 @@ def _make_fake_factory(
     return factory
 
 
+def _formal_runtime_resources_exist() -> bool:
+    """Whether the machine-specific formal runtime resources are on disk."""
+    return (
+        FORMAL_REPO_CWD.is_dir()
+        and FORMAL_GRAPH_MCP.is_file()
+        and FORMAL_GRAPH_SKILL.is_file()
+    )
+
+
+# Tests that construct adapters or assert clean validation require the
+# machine-specific runtime resources (QwenPaw repo, Graph MCP, Graph Skill) to
+# exist on disk. They run on the configured host and skip elsewhere; the
+# structural tests above do not need them.
+need_runtime_resources = pytest.mark.skipif(
+    not _formal_runtime_resources_exist(),
+    reason="formal runtime resources (QwenPaw repo, Graph MCP, Graph Skill) "
+    "not present on this host",
+)
+
+
 # --------------------------------------------------------------------------- #
 # Smoke config: loading, validation, planning, refusal
 # --------------------------------------------------------------------------- #
@@ -303,6 +338,194 @@ class TestSmokeConfig:
         assert plan.status == "smoke_only"
         with pytest.raises(SmokeOnlyExecutionError):
             execute_dispatch(plan, allow_execute=True)
+
+
+# --------------------------------------------------------------------------- #
+# Formal config: paths/values, six-run dry-run, Graph/Grep isolation
+# --------------------------------------------------------------------------- #
+
+
+class TestFormalConfig:
+    """The shipped QwenPaw formal config: values, six-run dry-run, isolation.
+
+    Structural tests (values, six-run plan, frozen revision, no credentials)
+    run anywhere the repo is checked out. Tests that touch the machine-specific
+    runtime resources (clean validation, executable plan, adapter isolation,
+    CLI dry-run) are guarded by ``need_runtime_resources``.
+    """
+
+    def test_formal_config_file_exists(self) -> None:
+        assert FORMAL_CONFIG.is_file(), f"missing formal config: {FORMAL_CONFIG}"
+
+    def test_load_formal_config_values(self) -> None:
+        config = load_experiment_config(FORMAL_CONFIG, repo_root=REPO_ROOT)
+        assert config.experiment_id == "qwenpaw-corrupt-inbox-formal-v1"
+        assert config.purpose == "formal"
+        assert config.status == "executable"
+        assert config.case_id == "qwenpaw-case-z-corrupt-inbox-recovery-bug"
+        assert config.task_type == "bug_localization"
+        assert config.scoring_profile == "bug_localization_v1"
+        assert config.judge_model == "glm-5.2"
+        assert config.pairing == "graph_vs_grep"
+        assert config.repeats == 3
+        assert len(config.conditions) == 2
+        assert config.conditions[0].id == "graph"
+        assert config.conditions[0].tool_policy == "graph"
+        assert config.conditions[1].id == "grep"
+        assert config.conditions[1].tool_policy == "grep"
+        # Runtime fields pin the frozen absolute paths and agent identity.
+        assert config.runtime is not None
+        rt = config.runtime
+        assert rt.agent_model == "glm-5.2"
+        assert rt.permission_mode == "auto"
+        assert rt.repo_cwd == FORMAL_REPO_CWD
+        assert rt.graph_mcp_configs == (FORMAL_GRAPH_MCP,)
+        assert rt.grep_mcp_configs == ()  # Grep has no Graph MCP input
+        assert rt.skill_file == FORMAL_GRAPH_SKILL
+        assert rt.runs_root == FORMAL_RUNS_ROOT
+        assert rt.skill_text is None  # skill via file, not inline text
+        assert rt.plugin_dirs == ()
+
+    def test_formal_config_case_paths_resolve(self) -> None:
+        config = load_experiment_config(FORMAL_CONFIG, repo_root=REPO_ROOT)
+        assert config.case_path.is_file()
+        assert config.ground_truth_path.is_file()
+
+    def test_formal_config_carries_frozen_revision(self) -> None:
+        """The QwenPaw revision is recorded as a non-secret freeze value."""
+        doc = yaml.safe_load(FORMAL_CONFIG.read_text(encoding="utf-8"))
+        assert doc["frozen_inputs"]["repo_revision"] == FORMAL_REPO_REVISION
+
+    def test_formal_config_has_no_credentials(self) -> None:
+        """No credential/secret values anywhere in the formal config."""
+        doc = yaml.safe_load(FORMAL_CONFIG.read_text(encoding="utf-8"))
+
+        secret_keys = frozenset(
+            {
+                "api_key", "apikey", "token", "secret", "password", "passwd",
+                "credential", "credentials", "access_key", "private_key",
+                "auth_token",
+            }
+        )
+
+        def _collect(obj: Any) -> set[str]:
+            found: set[str] = set()
+            if isinstance(obj, dict):
+                for k, v in obj.items():
+                    found.add(str(k).lower())
+                    found |= _collect(v)
+            elif isinstance(obj, list):
+                for v in obj:
+                    found |= _collect(v)
+            return found
+
+        assert not (_collect(doc) & secret_keys)
+
+    def test_formal_dry_run_six_runs(self) -> None:
+        """Dry-run builds a 6-run plan (3 Graph + 3 Grep), no execution.
+
+        Run IDs are deterministic and safe. The plan builds regardless of
+        whether the machine-specific runtime resources exist; the structural
+        six-run shape holds everywhere.
+        """
+        config = load_experiment_config(FORMAL_CONFIG, repo_root=REPO_ROOT)
+        plan = build_dispatch_plan(config)
+        assert len(plan.runs) == 6
+        graph_runs = [r for r in plan.runs if r.tool_policy == "graph"]
+        grep_runs = [r for r in plan.runs if r.tool_policy == "grep"]
+        assert len(graph_runs) == 3
+        assert len(grep_runs) == 3
+        assert [r.run_id for r in plan.runs] == [
+            "qwenpaw-corrupt-inbox-formal-v1__graph__r01",
+            "qwenpaw-corrupt-inbox-formal-v1__graph__r02",
+            "qwenpaw-corrupt-inbox-formal-v1__graph__r03",
+            "qwenpaw-corrupt-inbox-formal-v1__grep__r01",
+            "qwenpaw-corrupt-inbox-formal-v1__grep__r02",
+            "qwenpaw-corrupt-inbox-formal-v1__grep__r03",
+        ]
+        for rid in (r.run_id for r in plan.runs):
+            assert "/" not in rid
+            assert "\\" not in rid
+        # The case question is resolved as the agent prompt.
+        assert plan.case_prompt is not None
+
+    @need_runtime_resources
+    def test_formal_config_validates_clean(self) -> None:
+        config = load_experiment_config(FORMAL_CONFIG, repo_root=REPO_ROOT)
+        issues = validate_experiment_config(config)
+        assert issues == [], [str(i) for i in issues]
+
+    @need_runtime_resources
+    def test_formal_plan_is_executable(self) -> None:
+        config = load_experiment_config(FORMAL_CONFIG, repo_root=REPO_ROOT)
+        plan = build_dispatch_plan(config)
+        assert plan.is_executable
+
+    @need_runtime_resources
+    def test_formal_graph_grep_mcp_isolation(self) -> None:
+        """Default factory: Graph run gets the Graph MCP; Grep run gets none.
+
+        Adapter construction validates paths and reads the skill file but does
+        NOT launch a subprocess (``execute`` is never called). This verifies
+        Graph/Grep MCP isolation through the real default factory.
+        """
+        from runner.experiment_dispatch import _default_adapter_factory
+
+        config = load_experiment_config(FORMAL_CONFIG, repo_root=REPO_ROOT)
+        plan = build_dispatch_plan(config)
+        graph_adapter = _default_adapter_factory(plan.runs[0], plan)
+        grep_adapter = _default_adapter_factory(plan.runs[3], plan)
+        # Graph run receives only the Graph MCP config and keeps Graph patterns.
+        assert graph_adapter._graph_mcp_configs == (str(FORMAL_GRAPH_MCP),)
+        assert graph_adapter._grep_mcp_configs == ()
+        assert graph_adapter._tool_name_patterns.graph == (r"^mcp__gitnexus",)
+        # Grep run receives no Graph MCP config and has Graph patterns cleared.
+        assert grep_adapter._graph_mcp_configs == ()
+        assert grep_adapter._grep_mcp_configs == ()
+        assert grep_adapter._tool_name_patterns.graph == ()
+        # Grep MCP selection does not fail closed (P1 fix) and yields the empty
+        # Grep set.
+        assert grep_adapter._select_mcp_configs("grep") == ()
+        assert graph_adapter._select_mcp_configs("graph") == (
+            str(FORMAL_GRAPH_MCP),
+        )
+        # No subprocess launched: execute() was never called.
+        assert graph_adapter.last_command == []
+        assert grep_adapter.last_command == []
+
+    @need_runtime_resources
+    def test_formal_cli_validate_only(self) -> None:
+        import io
+        from contextlib import redirect_stdout
+
+        buf = io.StringIO()
+        with redirect_stdout(buf):
+            rc = br.main([
+                "dispatch", str(FORMAL_CONFIG),
+                "--repo-root", str(REPO_ROOT),
+                "--validate-only",
+            ])
+        assert rc == 0
+        assert "valid" in buf.getvalue().lower()
+
+    @need_runtime_resources
+    def test_formal_cli_dry_run(self) -> None:
+        """CLI dispatch --dry-run reports 6 planned runs and the run IDs."""
+        import io
+        from contextlib import redirect_stdout
+
+        buf = io.StringIO()
+        with redirect_stdout(buf):
+            rc = br.main([
+                "dispatch", str(FORMAL_CONFIG),
+                "--repo-root", str(REPO_ROOT),
+                "--dry-run",
+            ])
+        out = buf.getvalue()
+        assert rc == 0
+        assert "6 planned run" in out
+        assert "qwenpaw-corrupt-inbox-formal-v1__graph__r01" in out
+        assert "qwenpaw-corrupt-inbox-formal-v1__grep__r03" in out
 
 
 # --------------------------------------------------------------------------- #

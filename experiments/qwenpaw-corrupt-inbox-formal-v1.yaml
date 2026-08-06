@@ -1,0 +1,64 @@
+# AIS-012 formal experiment configuration (machine-specific).
+#
+# Formal configuration for the approved QwenPaw corrupt-inbox bug-localization
+# case. It wires absolute runtime paths to the target repository, Graph MCP,
+# Graph Skill and run output root, and is declared `executable` so the
+# dispatcher can validate it and build a dispatch plan.
+#
+# This file carries NO credential or secret values: the agent subprocess
+# inherits the parent Claude Code session; no key, token or password is present.
+# It is a declarative input-wiring configuration validated by
+# runner.experiment_dispatch, NOT an execution manifest and NOT a Judge result.
+# validate-only/dry-run build a deterministic 6-run plan (3 Graph + 3 Grep)
+# without launching subprocesses, MCP, Judge or external repository code.
+experiment_id: qwenpaw-corrupt-inbox-formal-v1
+purpose: formal
+status: executable
+case_id: qwenpaw-case-z-corrupt-inbox-recovery-bug
+task_type: bug_localization
+scoring_profile: bug_localization_v1
+case: cases/qwenpaw/qwenpaw-case-z-corrupt-inbox-recovery-bug.yaml
+ground_truth: ground-truth/qwenpaw/qwenpaw-case-z-corrupt-inbox-recovery-bug.yaml
+judge_model: glm-5.2
+# Paired Graph/Grep conditions: the same case is run once per condition per
+# repeat so the two tool policies are directly comparable.
+conditions:
+  - id: graph
+    tool_policy: graph
+  - id: grep
+    tool_policy: grep
+pairing: graph_vs_grep
+repeats: 3
+# Frozen runtime inputs (absolute local paths; non-secret). The QwenPaw target
+# repository revision is recorded for traceability. The current config contract
+# has no parsed field for a repository revision, so it is carried here as a
+# non-secret freeze value that the dispatcher ignores (no production schema is
+# invented and no dispatcher behavior is altered).
+frozen_inputs:
+  repo_revision: 09fc515c88a5e817870e6b975e66b5be81893e03
+runtime:
+  agent_model: glm-5.2
+  permission_mode: auto
+  repo_cwd: 'F:\develop\codes\QwenPaw\QwenPaw'
+  graph_mcp_configs:
+    - 'F:\develop\00-codes\benchmark-runtime\mcp\.mcp.json'
+  grep_mcp_configs: []
+  skill_file: 'F:\develop\00-codes\benchmark-runtime\skills\gitnexus-guide\SKILL.md'
+  runs_root: 'F:\develop\00-codes\benchmark-runtime\runs\GraphBenchmark-ai-score-v1'
+notes:
+  - >-
+    Formal configuration: validate-only/dry-run validate Case/GT/Profile and
+    runtime paths and build a deterministic 6-run dispatch plan (3 Graph +
+    3 Grep) without launching subprocesses, MCP, Judge or external repository
+    code. The formal experiment is NOT executed in this task.
+  - >-
+    Graph/Grep MCP isolation: the dispatcher's default adapter factory isolates
+    graph_mcp_configs to Graph runs (a Grep run receives an empty Graph MCP set
+    and has its Graph tool-name patterns cleared, failing closed if any Graph
+    MCP leaks in). grep_mcp_configs is empty: Grep has no Graph MCP input.
+  - >-
+    The Graph Skill (skill_file) is the config contract's single global skill
+    input, injected via --append-system-prompt. Graph runs receive the Graph
+    MCP set and this skill; Grep runs receive an empty MCP set, so no Graph
+    tool call is possible regardless of the skill text. This task is dry-run
+    only, so no subprocess is launched and no skill is applied to any run.

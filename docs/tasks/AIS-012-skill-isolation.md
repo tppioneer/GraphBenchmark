@@ -1,6 +1,6 @@
 # AIS-012 skill isolation remediation
 
-State: READY_FOR_REVIEW
+State: VERIFIED
 
 ## Objective
 
@@ -54,3 +54,20 @@ Return one `AGENT_RESULT` block with commit SHA, changed files, acceptance resul
 - Full suite: 840 passed
 - Formal validate-only and dry-run: passed; six runs planned, no formal execution
 - Ruff check and formatting checks: passed
+
+## Independent review
+
+- Review: `docs/reviews/AIS-012-skill-isolation-review-1.md`
+- Verdict: `PASS_WITH_NOTES`
+- F2 fully resolved: Graph-only Skill injection enforced at the dispatcher
+  factory; Grep receives no `skill_text`/`skill_file`; adapter fail-closes at
+  command-construction time if a skill reaches a Grep run (defense-in-depth).
+- `skill_file` is loaded into `_skill_text` at construction, so the Grep guard
+  covers both skill sources. No bypass path found.
+- Controller independently confirmed: full suite 840 passed at `74ab076`;
+  `git diff --check` clean; `ruff check` passed.
+- R1/R2 are non-blocking notes (pre-existing `ruff format` debt; task-card
+  creation by executor). Neither blocks VERIFIED.
+- Integration pending: `74ab076` and base `07d6cc4` are not ancestors of HEAD
+  (`2f5c169`). The code must be integrated into `ai-score-v1` (cherry-pick or
+  merge) before the formal-config F2 note can be closed.

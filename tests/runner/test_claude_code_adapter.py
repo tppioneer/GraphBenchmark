@@ -149,6 +149,7 @@ def test_argv_has_required_non_interactive_flags(tmp_path: Path) -> None:
     assert "--output-format" in argv
     idx = argv.index("--output-format")
     assert argv[idx + 1] == "stream-json"
+    assert "--verbose" in argv
     assert "--model" in argv
     assert argv[argv.index("--model") + 1] == MODEL
     assert "--permission-mode" in argv

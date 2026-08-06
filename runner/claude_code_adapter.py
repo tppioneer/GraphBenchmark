@@ -17,12 +17,14 @@ Grep runs, and this guard makes the isolation robust at command-construction
 time. The separation is auditable from the constructed command argv (stored
 redacted on the instance after each call via last_command).
 
-Skill/plugin inputs: there is no --skill flag in Claude Code 2.1.220. Explicit
+Skill/plugin inputs: there is no --skill flag in Claude Code. Explicit
 skill content is injected via --append-system-prompt (a documented, safe
 mechanism that does not read arbitrary global skill directories). Explicit
 plugins are loaded via --plugin-dir (repeatable, session-only). Slash commands
 (skills) are disabled by default via --disable-slash-commands to prevent
-accidental project-global skill loading.
+accidental project-global skill loading. CLI 2.1.223+ requires --verbose
+when using --print --output-format=stream-json; the adapter passes it
+unconditionally.
 
 Credentials (S13.6): the subprocess inherits the parent's environment and global
 Claude Code session. No key, token or password is passed as a CLI argument or
@@ -305,7 +307,7 @@ class ClaudeCodeAgentAdapter:
             mcp_configs = self._select_mcp_configs(tool_policy)
 
         args: list[str] = [self._cli_path]
-        args.extend(["--print", "--output-format", "stream-json"])
+        args.extend(["--print", "--output-format", "stream-json", "--verbose"])
         args.extend(["--model", self._agent_model])
         args.extend(["--permission-mode", self._permission_mode])
 

@@ -1,14 +1,15 @@
 # AIS-012: 端到端冻结并执行正式实验
 
-State: BLOCKED
+State: IMPLEMENTING
 
 ## Execution
 
 - Executor: Claude Code (`glm-5.2`, automatic permission mode)
-- Fixed base: `23731d7424a776a55c2ccaf152820d3e3ee4fdcc`
+- Fixed base: `b32068f` (`ai-score-v1`)
 - Isolated worktree: `F:\develop\codes\GraphBenchmark-ai-score-v1-worktrees\ais-012-e2e-release`
 - Dispatch mode: preflight first; formal Judge execution is permitted only after all frozen-input and credential-availability gates pass.
-- Preflight result (2026-08-03): BLOCKED. No approved formal `cases`/GT set, frozen formal manifest, or concrete AgentAdapter is present; the supported Claude health check also reports Judge authentication inactive. No Judge call or artifact generation was attempted.
+- Preflight 1 (2026-08-03): BLOCKED. No approved formal cases/GT, no frozen manifest, no AgentAdapter, Judge auth inactive.
+- Preflight 2 (2026-08-06): PASS. All four blockers resolved (formal cases/GT integrated, formal config integrated, AgentAdapter+dispatcher integrated, Claude auth active). See `docs/reviews/AIS-012-preflight-2.md`.
 
 ## Objective
 

@@ -1,6 +1,6 @@
 # AIS-012 configuration-driven experiment dispatch
 
-State: VERIFIED
+State: INTEGRATED
 
 ## Objective
 
@@ -57,3 +57,4 @@ Add a configuration-driven dispatch layer that loads an experiment YAML, validat
 - Verdict: `PASS` for `4406a39fb5aecce3002b6b85f591f9e7341bcd59..a6cd41976e8f20e3447d2d9a9c23c828887a38cf`.
 - All P1/P2 findings were independently verified fixed; no blocking findings remain. P3 observations are limited to minor coverage/diagnostic details.
 - Validation: focused dispatch tests 55 passed; full suite 821 passed; Ruff passed. No real Claude/MCP/Judge execution occurred.
+- Integration: original dispatcher and remediation integrated to `ai-score-v1` as `ce13016` and `3e57f4a`; post-integration full suite 821 passed, Ruff and diff checks passed.

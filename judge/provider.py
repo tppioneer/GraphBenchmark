@@ -54,6 +54,15 @@ UNVERIFIABLE_MODEL = "unverifiable"
 #: Regex to extract the real ``.exe`` path from a ``.CMD``/``.BAT`` wrapper.
 _CMD_EXE_RE = re.compile(r'"([^"]*\.exe)"', re.IGNORECASE)
 
+
+def _to_text(data: object) -> str:
+    """Decode subprocess output to text, handling both bytes and str (mocks)."""
+    if data is None:
+        return ""
+    if isinstance(data, bytes):
+        return data.decode("utf-8", errors="replace")
+    return str(data)
+
 #: Patterns whose matches in output are replaced with ``<REDACTED>``.
 #: Patterns whose matches in output are replaced with ``<REDACTED>``.
 #: Each entry is ``(pattern, replacement_template)``.
@@ -211,10 +220,9 @@ class ClaudeCodeCliProvider(JudgeProvider):
             result = subprocess.run(
                 [self._find_claude(), "--help"],
                 capture_output=True,
-                text=True,
                 timeout=30,
             )
-            help_text = result.stdout + result.stderr
+            help_text = _to_text(result.stdout) + _to_text(result.stderr)
         except (OSError, subprocess.TimeoutExpired) as exc:
             raise JudgeProviderError(
                 f"cannot probe claude CLI: {exc}"
@@ -242,13 +250,12 @@ class ClaudeCodeCliProvider(JudgeProvider):
             result = subprocess.run(
                 [self._find_claude(), "--version"],
                 capture_output=True,
-                text=True,
                 timeout=15,
             )
-            version = (result.stdout or result.stderr).strip()
+            version = (_to_text(result.stdout) + _to_text(result.stderr)).strip()
             if version:
                 return version.splitlines()[0].strip()
-        except (FileNotFoundError, subprocess.TimeoutExpired):
+        except (OSError, subprocess.TimeoutExpired):
             pass
         return "unknown"
 
@@ -339,13 +346,12 @@ class ClaudeCodeCliProvider(JudgeProvider):
                 proc = subprocess.run(
                     cli_args,
                     capture_output=True,
-                    text=True,
                     timeout=params.timeout_ms / 1000,
                     env={**os.environ, "CLAUDE_CODE_SIMPLE": "1"},
                 )
 
-                stdout = proc.stdout or ""
-                stderr = proc.stderr or ""
+                stdout = _to_text(proc.stdout)
+                stderr = _to_text(proc.stderr)
                 elapsed = int((time.monotonic() - start) * 1000)
 
                 if proc.returncode != 0:

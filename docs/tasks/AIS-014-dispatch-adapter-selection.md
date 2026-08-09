@@ -1,6 +1,6 @@
 # AIS-014: Configuration-selectable AgentAdapter dispatch
 
-State: READY_FOR_REVIEW
+State: VERIFIED
 
 ## Objective
 
@@ -69,3 +69,9 @@ Return a strict `AGENT_RESULT` with base/head, changed files, acceptance evidenc
 - Scope: `runner/experiment_dispatch.py` and `tests/runner/test_experiment_dispatch.py` only.
 - Verification reported: 83 dispatch tests, 950 full-suite tests, Ruff check/format, and diff check passed.
 - Known follow-up: the CLI `--runs-root` override path in `benchmark_runner.py` does not forward `agent_adapter`; this is outside AIS-014 scope and must not be silently fixed in this task.
+
+## Independent review result
+
+- Verdict: `PASS_WITH_NOTES` from Claude Code (`glm-5.2`) over `c2ca454..85f5842`.
+- Focused dispatch tests (83), full suite (950), Ruff checks, format check, and diff check passed.
+- Non-blocking notes: direct `RuntimeFields(agent_adapter="opencode")` construction without an explicit model uses the Claude default; a private factory uses an assertion for an internal precondition. Both are outside the shipped configuration path and deferred.

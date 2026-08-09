@@ -1,6 +1,6 @@
 # AIS-014: Configuration-selectable AgentAdapter dispatch
 
-State: VERIFIED
+State: INTEGRATED
 
 ## Objective
 
@@ -75,3 +75,9 @@ Return a strict `AGENT_RESULT` with base/head, changed files, acceptance evidenc
 - Verdict: `PASS_WITH_NOTES` from Claude Code (`glm-5.2`) over `c2ca454..85f5842`.
 - Focused dispatch tests (83), full suite (950), Ruff checks, format check, and diff check passed.
 - Non-blocking notes: direct `RuntimeFields(agent_adapter="opencode")` construction without an explicit model uses the Claude default; a private factory uses an assertion for an internal precondition. Both are outside the shipped configuration path and deferred.
+
+## Integration result
+
+- Integrated commit: `03b857e`.
+- Post-integration verification: 83 dispatch tests and 950 full-suite tests passed.
+- No live agent or provider call was performed.

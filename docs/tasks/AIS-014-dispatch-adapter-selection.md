@@ -1,6 +1,6 @@
 # AIS-014: Configuration-selectable AgentAdapter dispatch
 
-State: IMPLEMENTING
+State: READY_FOR_REVIEW
 
 ## Objective
 
@@ -62,3 +62,10 @@ Extend `runner/experiment_dispatch.py` so executable experiment configurations c
 ## Delivery contract
 
 Return a strict `AGENT_RESULT` with base/head, changed files, acceptance evidence, exact checks, deviations, and residual risks. Commit one coherent implementation.
+
+## Implementation result
+
+- Commit: `85f5842b01ed3dbd0179f24d12849be1494be82b` based on `c2ca454b1b2ba52d13438ce109180a87587b6f01`.
+- Scope: `runner/experiment_dispatch.py` and `tests/runner/test_experiment_dispatch.py` only.
+- Verification reported: 83 dispatch tests, 950 full-suite tests, Ruff check/format, and diff check passed.
+- Known follow-up: the CLI `--runs-root` override path in `benchmark_runner.py` does not forward `agent_adapter`; this is outside AIS-014 scope and must not be silently fixed in this task.

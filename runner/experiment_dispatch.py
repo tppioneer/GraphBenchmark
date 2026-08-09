@@ -3,25 +3,36 @@
 Loads a YAML experiment configuration, validates its Case and Ground
 Truth/Profile against the production validators, builds a deterministic
 dispatch plan (one planned run per declared condition x repeat), and -
-only when explicitly opted in - executes each planned run by constructing a
-:class:`~runner.claude_code_adapter.ClaudeCodeAgentAdapter` and calling the
+only when explicitly opted in - executes each planned run by constructing the
+adapter selected by ``runtime.agent_adapter`` (``claude-code`` default ->
+:class:`~runner.claude_code_adapter.ClaudeCodeAgentAdapter`; ``opencode`` ->
+:class:`~runner.opencode_adapter.OpenCodeAgentAdapter`) and calling the
 existing :func:`~runner.benchmark_runner.execute_run`.
 
 Design invariants (see docs/ai-scoring-design.md S8.6-8.8, S15, S17-18, S20):
 
 * Validation occurs BEFORE any subprocess launch. A config with an invalid
   Case, GT/Profile, or runtime configuration cannot reach execution.
+* Adapter selection (AIS-014): ``runtime.agent_adapter`` selects the adapter,
+  defaulting to ``claude-code`` for backward compatibility and accepting
+  ``opencode`` (AIS-013). Unknown values are rejected as
+  ``CONFIG_INVALID_AGENT_ADAPTER`` before any launch. The adapter name is
+  recorded in :class:`RunIdentity.agent`; ``runtime.agent_model`` is passed
+  unchanged to either adapter (and defaults to the selected adapter's model
+  when unset).
 * ``status: smoke_only`` configs (including the shipped QwenPaw smoke file)
   are explicitly non-executable: they validate inputs but never launch.
-* Graph/Grep isolation: each run instantiates a fresh
-  :class:`ClaudeCodeAgentAdapter` with ONLY the MCP configs matching its
-  ``tool_policy``. A Graph run receives only ``graph_mcp_configs``; a Grep
-  run receives only ``grep_mcp_configs`` (the adapter fails closed if Graph
-  configs leak into a Grep run). The configured skill is likewise injected
-  only into runs whose policy grants Graph tool access (graph, mixed); a
-  Grep run receives no skill, so the Graph Skill text cannot contaminate the
-  Grep baseline (AIS-012, F2). The adapter fail-closes if a skill reaches a
-  Grep run regardless.
+* Graph/Grep isolation: each run instantiates a fresh adapter with ONLY the
+  MCP configs matching its ``tool_policy``. A Graph run receives only
+  ``graph_mcp_configs``; a Grep run receives only ``grep_mcp_configs`` (the
+  adapter fails closed if Graph configs leak into a Grep run). The configured
+  skill is likewise injected only into runs whose policy grants Graph tool
+  access (graph, mixed); a Grep run receives no skill, so the Graph Skill text
+  cannot contaminate the Grep baseline (AIS-012, F2). The adapter fail-closes
+  if a skill reaches a Grep run regardless. This isolation is identical for
+  both adapters; OpenCode receives only the fields it supports (no plugins,
+  no permission mode), while Claude receives its existing permission/plugin
+  fields.
 * The natural-language agent answer flows unchanged through
   :mod:`runner.execution`; the dispatcher never fabricates answer JSON,
   metrics, or Judge results. It collects :class:`RunResult` objects and
@@ -60,6 +71,13 @@ from runner.claude_code_adapter import (
     ClaudeCodeAgentAdapter,
     ToolNamePatterns,
 )
+from runner.opencode_adapter import (
+    DEFAULT_AGENT_MODEL as _OPENCODE_DEFAULT_AGENT_MODEL,
+)
+from runner.opencode_adapter import (
+    OpenCodeAgentAdapter,
+    OpenCodeToolNamePatterns,
+)
 from scoring.rubric_validator import validate_profile_and_rubric
 
 __all__ = [
@@ -79,12 +97,33 @@ __all__ = [
     "execute_dispatch",
     "SMOKE_ONLY_STATUS",
     "EXECUTABLE_STATUS",
+    "DEFAULT_AGENT_ADAPTER",
 ]
 
 SMOKE_ONLY_STATUS = "smoke_only"
 EXECUTABLE_STATUS = "executable"
 
 _VALID_TOOL_POLICIES = ("graph", "grep", "mixed")
+
+#: Default ``runtime.agent_adapter`` (AIS-014). ``claude-code`` preserves
+#: backward compatibility for configs that do not declare an adapter; the
+#: reference implementation is :class:`ClaudeCodeAgentAdapter`.
+DEFAULT_AGENT_ADAPTER = "claude-code"
+
+#: Accepted ``runtime.agent_adapter`` values. Unknown values are rejected by
+#: :func:`validate_experiment_config` (``CONFIG_INVALID_AGENT_ADAPTER``) before
+#: any subprocess launch, mirroring ``tool_policy`` enum validation.
+_VALID_AGENT_ADAPTERS = ("claude-code", "opencode")
+
+#: Adapter-specific default agent model (model/runtime mapping, AIS-014). When a
+#: config selects an adapter without an explicit ``runtime.agent_model``, the
+#: default is taken from the selected adapter's module so each adapter receives a
+#: model valid for its provider. An explicit ``agent_model`` is passed unchanged
+#: to either adapter (invariant); only the unset default is adapter-specific.
+_DEFAULT_AGENT_MODELS = {
+    "claude-code": DEFAULT_AGENT_MODEL,
+    "opencode": _OPENCODE_DEFAULT_AGENT_MODEL,
+}
 
 #: Characters allowed in a sanitized run-id component.
 _RUN_ID_SAFE_RE = re.compile(r"[^a-zA-Z0-9._-]")
@@ -136,11 +175,15 @@ class ConditionSpec:
 class RuntimeFields:
     """Explicit runtime configuration for an executable experiment.
 
-    All paths are resolved (absolute) at load time. ``skill_text`` and
+    ``agent_adapter`` selects the agent adapter (``claude-code`` default,
+    ``opencode`` for AIS-013); ``agent_model`` defaults to the selected
+    adapter's model when not declared explicitly (model/runtime mapping). All
+    paths are resolved (absolute) at load time. ``skill_text`` and
     ``skill_file`` are mutually exclusive. ``runs_root`` is required for
     execution but may be absent for dry-run planning.
     """
 
+    agent_adapter: str = DEFAULT_AGENT_ADAPTER
     agent_model: str = DEFAULT_AGENT_MODEL
     repo_cwd: Path | None = None
     graph_mcp_configs: tuple[Path, ...] = ()
@@ -268,9 +311,7 @@ def load_experiment_config(
     with config_path.open(encoding="utf-8") as fh:
         raw = yaml.safe_load(fh)
     if not isinstance(raw, dict):
-        raise DispatchError(
-            f"config must be a YAML mapping, got {type(raw).__name__}"
-        )
+        raise DispatchError(f"config must be a YAML mapping, got {type(raw).__name__}")
 
     experiment_id = _require_str(raw, "experiment_id")
     purpose = _require_str(raw, "purpose")
@@ -331,34 +372,40 @@ def validate_experiment_config(
 
     # -- Config structural checks ------------------------------------------- #
     if config.status not in (SMOKE_ONLY_STATUS, EXECUTABLE_STATUS):
-        issues.append(ValidationIssue(
-            code="CONFIG_STATUS_UNKNOWN",
-            message=(
-                f"status must be {SMOKE_ONLY_STATUS!r} or "
-                f"{EXECUTABLE_STATUS!r}, got {config.status!r}"
-            ),
-            source="config",
-            pointer="/status",
-        ))
-    if not config.conditions:
-        issues.append(ValidationIssue(
-            code="CONFIG_NO_CONDITIONS",
-            message="at least one condition must be declared",
-            source="config",
-            pointer="/conditions",
-        ))
-    for cond in config.conditions:
-        if cond.tool_policy not in _VALID_TOOL_POLICIES:
-            issues.append(ValidationIssue(
-                code="CONFIG_INVALID_TOOL_POLICY",
+        issues.append(
+            ValidationIssue(
+                code="CONFIG_STATUS_UNKNOWN",
                 message=(
-                    f"condition {cond.id!r} has unknown tool_policy "
-                    f"{cond.tool_policy!r}; expected one of "
-                    f"{_VALID_TOOL_POLICIES}"
+                    f"status must be {SMOKE_ONLY_STATUS!r} or "
+                    f"{EXECUTABLE_STATUS!r}, got {config.status!r}"
                 ),
                 source="config",
+                pointer="/status",
+            )
+        )
+    if not config.conditions:
+        issues.append(
+            ValidationIssue(
+                code="CONFIG_NO_CONDITIONS",
+                message="at least one condition must be declared",
+                source="config",
                 pointer="/conditions",
-            ))
+            )
+        )
+    for cond in config.conditions:
+        if cond.tool_policy not in _VALID_TOOL_POLICIES:
+            issues.append(
+                ValidationIssue(
+                    code="CONFIG_INVALID_TOOL_POLICY",
+                    message=(
+                        f"condition {cond.id!r} has unknown tool_policy "
+                        f"{cond.tool_policy!r}; expected one of "
+                        f"{_VALID_TOOL_POLICIES}"
+                    ),
+                    source="config",
+                    pointer="/conditions",
+                )
+            )
 
     # -- Duplicate condition IDs and sanitized run-id collisions -------------- #
     # Run IDs are built from sanitized condition IDs; two conditions with the
@@ -368,27 +415,31 @@ def validate_experiment_config(
     seen_sanitized: dict[str, str] = {}
     for cond in config.conditions:
         if cond.id in seen_ids:
-            issues.append(ValidationIssue(
-                code="CONFIG_DUPLICATE_CONDITION_ID",
-                message=f"duplicate condition id {cond.id!r}",
-                source="config",
-                pointer="/conditions",
-            ))
+            issues.append(
+                ValidationIssue(
+                    code="CONFIG_DUPLICATE_CONDITION_ID",
+                    message=f"duplicate condition id {cond.id!r}",
+                    source="config",
+                    pointer="/conditions",
+                )
+            )
         else:
             seen_ids.add(cond.id)
         sanitized = _sanitize_run_id_component(cond.id)
         prior = seen_sanitized.get(sanitized)
         if prior is not None and prior != cond.id:
-            issues.append(ValidationIssue(
-                code="CONFIG_CONDITION_ID_COLLISION",
-                message=(
-                    f"condition id {cond.id!r} sanitizes to {sanitized!r}, "
-                    f"colliding with condition {prior!r}; run IDs would not "
-                    f"be unique"
-                ),
-                source="config",
-                pointer="/conditions",
-            ))
+            issues.append(
+                ValidationIssue(
+                    code="CONFIG_CONDITION_ID_COLLISION",
+                    message=(
+                        f"condition id {cond.id!r} sanitizes to {sanitized!r}, "
+                        f"colliding with condition {prior!r}; run IDs would not "
+                        f"be unique"
+                    ),
+                    source="config",
+                    pointer="/conditions",
+                )
+            )
         else:
             seen_sanitized[sanitized] = cond.id
 
@@ -397,89 +448,108 @@ def validate_experiment_config(
     if case_doc is not None:
         if isinstance(case_doc, dict):
             for err in _CASE_VALIDATOR.iter_errors(case_doc):
-                issues.append(ValidationIssue(
-                    code="CASE_SCHEMA_INVALID",
-                    message=err.message,
-                    source="case_schema",
-                    pointer=_json_pointer(err.absolute_path),
-                ))
+                issues.append(
+                    ValidationIssue(
+                        code="CASE_SCHEMA_INVALID",
+                        message=err.message,
+                        source="case_schema",
+                        pointer=_json_pointer(err.absolute_path),
+                    )
+                )
             if case_doc.get("case_id") != config.case_id:
-                issues.append(ValidationIssue(
-                    code="CROSS_CASE_ID_MISMATCH",
-                    message=(
-                        f"case case_id {case_doc.get('case_id')!r} != "
-                        f"config case_id {config.case_id!r}"
-                    ),
-                    source="cross_check",
-                    pointer="/case_id",
-                ))
+                issues.append(
+                    ValidationIssue(
+                        code="CROSS_CASE_ID_MISMATCH",
+                        message=(
+                            f"case case_id {case_doc.get('case_id')!r} != "
+                            f"config case_id {config.case_id!r}"
+                        ),
+                        source="cross_check",
+                        pointer="/case_id",
+                    )
+                )
             if case_doc.get("task_type") != config.task_type:
-                issues.append(ValidationIssue(
-                    code="CROSS_TASK_TYPE_MISMATCH",
-                    message=(
-                        f"case task_type {case_doc.get('task_type')!r} != "
-                        f"config task_type {config.task_type!r}"
-                    ),
-                    source="cross_check",
-                    pointer="/task_type",
-                ))
+                issues.append(
+                    ValidationIssue(
+                        code="CROSS_TASK_TYPE_MISMATCH",
+                        message=(
+                            f"case task_type {case_doc.get('task_type')!r} != "
+                            f"config task_type {config.task_type!r}"
+                        ),
+                        source="cross_check",
+                        pointer="/task_type",
+                    )
+                )
         else:
-            issues.append(ValidationIssue(
-                code="CASE_NOT_OBJECT",
-                message="case document must be a YAML mapping",
-                source="case_schema",
-            ))
+            issues.append(
+                ValidationIssue(
+                    code="CASE_NOT_OBJECT",
+                    message="case document must be a YAML mapping",
+                    source="case_schema",
+                )
+            )
 
     # -- GT/Profile validation via production validator ----------------------- #
     gt_doc = _safe_load_yaml(config.ground_truth_path, issues, "ground_truth")
     if gt_doc is not None:
         if isinstance(gt_doc, dict):
             for ri in validate_profile_and_rubric(gt_doc):
-                issues.append(ValidationIssue(
-                    code=ri.code,
-                    message=ri.message,
-                    source="gt_profile",
-                    pointer=ri.pointer,
-                ))
+                issues.append(
+                    ValidationIssue(
+                        code=ri.code,
+                        message=ri.message,
+                        source="gt_profile",
+                        pointer=ri.pointer,
+                    )
+                )
             if gt_doc.get("case_id") != config.case_id:
-                issues.append(ValidationIssue(
-                    code="CROSS_GT_CASE_ID_MISMATCH",
-                    message=(
-                        f"GT case_id {gt_doc.get('case_id')!r} != "
-                        f"config case_id {config.case_id!r}"
-                    ),
-                    source="cross_check",
-                    pointer="/case_id",
-                ))
+                issues.append(
+                    ValidationIssue(
+                        code="CROSS_GT_CASE_ID_MISMATCH",
+                        message=(
+                            f"GT case_id {gt_doc.get('case_id')!r} != "
+                            f"config case_id {config.case_id!r}"
+                        ),
+                        source="cross_check",
+                        pointer="/case_id",
+                    )
+                )
             if gt_doc.get("task_type") != config.task_type:
-                issues.append(ValidationIssue(
-                    code="CROSS_GT_TASK_TYPE_MISMATCH",
-                    message=(
-                        f"GT task_type {gt_doc.get('task_type')!r} != "
-                        f"config task_type {config.task_type!r}"
-                    ),
-                    source="cross_check",
-                    pointer="/task_type",
-                ))
+                issues.append(
+                    ValidationIssue(
+                        code="CROSS_GT_TASK_TYPE_MISMATCH",
+                        message=(
+                            f"GT task_type {gt_doc.get('task_type')!r} != "
+                            f"config task_type {config.task_type!r}"
+                        ),
+                        source="cross_check",
+                        pointer="/task_type",
+                    )
+                )
             if gt_doc.get("scoring_profile") != config.scoring_profile:
-                issues.append(ValidationIssue(
-                    code="CROSS_GT_PROFILE_MISMATCH",
-                    message=(
-                        f"GT scoring_profile {gt_doc.get('scoring_profile')!r} "
-                        f"!= config scoring_profile {config.scoring_profile!r}"
-                    ),
-                    source="cross_check",
-                    pointer="/scoring_profile",
-                ))
+                issues.append(
+                    ValidationIssue(
+                        code="CROSS_GT_PROFILE_MISMATCH",
+                        message=(
+                            f"GT scoring_profile {gt_doc.get('scoring_profile')!r} "
+                            f"!= config scoring_profile {config.scoring_profile!r}"
+                        ),
+                        source="cross_check",
+                        pointer="/scoring_profile",
+                    )
+                )
         else:
-            issues.append(ValidationIssue(
-                code="GT_NOT_OBJECT",
-                message="ground truth document must be a YAML mapping",
-                source="gt_profile",
-            ))
+            issues.append(
+                ValidationIssue(
+                    code="GT_NOT_OBJECT",
+                    message="ground truth document must be a YAML mapping",
+                    source="gt_profile",
+                )
+            )
 
-    # -- Runtime path validation --------------------------------------------- #
+    # -- Runtime validation (adapter selection + paths) --------------------- #
     if config.runtime is not None:
+        issues.extend(_validate_runtime_adapter(config.runtime))
         issues.extend(_validate_runtime_paths(config.runtime))
 
     issues.sort(key=lambda x: (x.source, x.code, x.pointer, x.message))
@@ -509,13 +579,15 @@ def build_dispatch_plan(
 
     effective_runtime = runtime if runtime is not None else config.runtime
 
-    # When a runtime override is supplied, validate its paths independently.
-    # validate_experiment_config checked config.runtime (if any); the override
-    # replaces it for execution, so its paths must also be validated here so
-    # misconfigured paths surface as deterministic Dispatch/config errors
-    # (ConfigValidationError at execute_dispatch) rather than uncaught
-    # AgentAdapterError at adapter construction time.
+    # When a runtime override is supplied, validate its adapter and paths
+    # independently. validate_experiment_config checked config.runtime (if any);
+    # the override replaces it for execution, so its adapter selection and paths
+    # must also be validated here so misconfigured values surface as
+    # deterministic Dispatch/config errors (ConfigValidationError at
+    # execute_dispatch) rather than uncaught AgentAdapterError at adapter
+    # construction time.
     if runtime is not None:
+        issues.extend(_validate_runtime_adapter(runtime))
         issues.extend(_validate_runtime_paths(runtime))
 
     # Resolve the case prompt (the agent's input). If the case is loadable
@@ -538,11 +610,13 @@ def build_dispatch_plan(
     try:
         runs = list(_build_planned_runs(config, effective_runtime))
     except DispatchError as exc:
-        issues.append(ValidationIssue(
-            code="RUN_ID_UNSAFE",
-            message=str(exc),
-            source="config",
-        ))
+        issues.append(
+            ValidationIssue(
+                code="RUN_ID_UNSAFE",
+                message=str(exc),
+                source="config",
+            )
+        )
 
     # Deterministic ordering for issues collected from multiple sources
     # (config validation, runtime override paths, run-id safety).
@@ -575,9 +649,7 @@ def execute_dispatch(
     plan: DispatchPlan,
     *,
     allow_execute: bool = False,
-    adapter_factory: (
-        Callable[[PlannedRun, DispatchPlan], AgentAdapter] | None
-    ) = None,
+    adapter_factory: (Callable[[PlannedRun, DispatchPlan], AgentAdapter] | None) = None,
 ) -> list[RunResult]:
     """Execute a dispatch plan by launching each planned run.
 
@@ -599,8 +671,7 @@ def execute_dispatch(
         )
     if plan.status == SMOKE_ONLY_STATUS:
         raise SmokeOnlyExecutionError(
-            f"experiment {plan.experiment_id!r} is smoke_only and cannot "
-            f"be executed"
+            f"experiment {plan.experiment_id!r} is smoke_only and cannot be executed"
         )
     if plan.validation_issues:
         raise ConfigValidationError(
@@ -614,9 +685,7 @@ def execute_dispatch(
             "in the config or pass runtime to build_dispatch_plan)"
         )
     if runtime.runs_root is None:
-        raise IncompleteRuntimeError(
-            "runtime.runs_root is required for execution"
-        )
+        raise IncompleteRuntimeError("runtime.runs_root is required for execution")
     if not plan.case_prompt:
         raise IncompleteRuntimeError(
             "no case prompt resolved; the case question is missing or empty "
@@ -648,24 +717,16 @@ def execute_dispatch(
 def _require_str(raw: dict[str, Any], key: str) -> str:
     val = raw.get(key)
     if not isinstance(val, str) or not val.strip():
-        raise DispatchError(
-            f"config field {key!r} must be a non-empty string, got {val!r}"
-        )
+        raise DispatchError(f"config field {key!r} must be a non-empty string, got {val!r}")
     return val
 
 
-def _require_int(
-    raw: dict[str, Any], key: str, *, minimum: int | None = None
-) -> int:
+def _require_int(raw: dict[str, Any], key: str, *, minimum: int | None = None) -> int:
     val = raw.get(key)
     if not isinstance(val, int) or isinstance(val, bool):
-        raise DispatchError(
-            f"config field {key!r} must be an integer, got {val!r}"
-        )
+        raise DispatchError(f"config field {key!r} must be an integer, got {val!r}")
     if minimum is not None and val < minimum:
-        raise DispatchError(
-            f"config field {key!r} must be >= {minimum}, got {val}"
-        )
+        raise DispatchError(f"config field {key!r} must be >= {minimum}, got {val}")
     return val
 
 
@@ -681,23 +742,17 @@ def _parse_conditions(raw: Any) -> tuple[ConditionSpec, ...]:
     if raw is None:
         return ()
     if not isinstance(raw, list):
-        raise DispatchError(
-            f"conditions must be a list, got {type(raw).__name__}"
-        )
+        raise DispatchError(f"conditions must be a list, got {type(raw).__name__}")
     conditions: list[ConditionSpec] = []
     for i, entry in enumerate(raw):
         if not isinstance(entry, dict):
-            raise DispatchError(
-                f"conditions[{i}] must be a mapping, got {type(entry).__name__}"
-            )
+            raise DispatchError(f"conditions[{i}] must be a mapping, got {type(entry).__name__}")
         cid = entry.get("id")
         policy = entry.get("tool_policy")
         if not isinstance(cid, str) or not cid.strip():
             raise DispatchError(f"conditions[{i}].id must be a non-empty string")
         if not isinstance(policy, str) or not policy.strip():
-            raise DispatchError(
-                f"conditions[{i}].tool_policy must be a non-empty string"
-            )
+            raise DispatchError(f"conditions[{i}].tool_policy must be a non-empty string")
         conditions.append(ConditionSpec(id=cid, tool_policy=policy))
     return tuple(conditions)
 
@@ -706,11 +761,24 @@ def _parse_runtime(raw: Any) -> RuntimeFields | None:
     if raw is None:
         return None
     if not isinstance(raw, dict):
-        raise DispatchError(
-            f"runtime must be a mapping, got {type(raw).__name__}"
-        )
+        raise DispatchError(f"runtime must be a mapping, got {type(raw).__name__}")
 
-    agent_model = raw.get("agent_model", DEFAULT_AGENT_MODEL)
+    agent_adapter = raw.get("agent_adapter", DEFAULT_AGENT_ADAPTER)
+    if not isinstance(agent_adapter, str) or not agent_adapter.strip():
+        raise DispatchError("runtime.agent_adapter must be a non-empty string")
+    # Enum membership is validated by validate_experiment_config
+    # (CONFIG_INVALID_AGENT_ADAPTER) so an unknown value surfaces as a
+    # deterministic validation issue, mirroring tool_policy handling.
+
+    # Model/runtime mapping: when no explicit agent_model is declared, default
+    # to the selected adapter's model so each adapter receives a provider-valid
+    # model. An unknown adapter falls back to the Claude default here; the bad
+    # adapter value is reported separately by validate_experiment_config.
+    agent_model_value = raw.get("agent_model")
+    if agent_model_value is None:
+        agent_model = _DEFAULT_AGENT_MODELS.get(agent_adapter, DEFAULT_AGENT_MODEL)
+    else:
+        agent_model = agent_model_value
     if not isinstance(agent_model, str) or not agent_model.strip():
         raise DispatchError("runtime.agent_model must be a non-empty string")
 
@@ -730,11 +798,10 @@ def _parse_runtime(raw: Any) -> RuntimeFields | None:
         raise DispatchError("runtime.case_prompt must be a string if present")
 
     if skill_text is not None and skill_file is not None:
-        raise DispatchError(
-            "runtime.skill_text and runtime.skill_file are mutually exclusive"
-        )
+        raise DispatchError("runtime.skill_text and runtime.skill_file are mutually exclusive")
 
     return RuntimeFields(
+        agent_adapter=agent_adapter,
         agent_model=agent_model,
         repo_cwd=repo_cwd,
         graph_mcp_configs=graph_mcp_configs,
@@ -754,9 +821,7 @@ def _opt_path(raw: dict[str, Any], key: str) -> Path | None:
     if val is None:
         return None
     if not isinstance(val, str):
-        raise DispatchError(
-            f"runtime.{key} must be a string path if present, got {val!r}"
-        )
+        raise DispatchError(f"runtime.{key} must be a string path if present, got {val!r}")
     return Path(val)
 
 
@@ -765,15 +830,11 @@ def _opt_path_list(raw: dict[str, Any], key: str) -> tuple[Path, ...]:
     if val is None:
         return ()
     if not isinstance(val, list):
-        raise DispatchError(
-            f"runtime.{key} must be a list if present, got {type(val).__name__}"
-        )
+        raise DispatchError(f"runtime.{key} must be a list if present, got {type(val).__name__}")
     paths: list[Path] = []
     for i, item in enumerate(val):
         if not isinstance(item, str):
-            raise DispatchError(
-                f"runtime.{key}[{i}] must be a string path, got {item!r}"
-            )
+            raise DispatchError(f"runtime.{key}[{i}] must be a string path, got {item!r}")
         paths.append(Path(item))
     return tuple(paths)
 
@@ -783,20 +844,45 @@ def _opt_path_list(raw: dict[str, Any], key: str) -> tuple[Path, ...]:
 # --------------------------------------------------------------------------- #
 
 
-def _safe_load_yaml(
-    path: Path, issues: list[ValidationIssue], label: str
-) -> dict[str, Any] | None:
+def _safe_load_yaml(path: Path, issues: list[ValidationIssue], label: str) -> dict[str, Any] | None:
     """Load a YAML file, appending a validation issue on failure."""
     try:
         doc = yaml.safe_load(path.read_text(encoding="utf-8"))
     except (OSError, yaml.YAMLError) as exc:
-        issues.append(ValidationIssue(
-            code=f"{label.upper()}_LOAD_FAILED",
-            message=f"failed to load {label} at {path}: {exc}",
-            source=label,
-        ))
+        issues.append(
+            ValidationIssue(
+                code=f"{label.upper()}_LOAD_FAILED",
+                message=f"failed to load {label} at {path}: {exc}",
+                source=label,
+            )
+        )
         return None
     return doc
+
+
+def _validate_runtime_adapter(
+    runtime: RuntimeFields,
+) -> list[ValidationIssue]:
+    """Validate ``runtime.agent_adapter`` is a known adapter value (AIS-014).
+
+    Mirrors ``tool_policy`` enum validation: an unknown value is collected as a
+    ``CONFIG_INVALID_AGENT_ADAPTER`` issue (rather than raised at load time) so
+    the plan is non-executable. :func:`execute_dispatch` refuses plans with
+    validation issues, so an unknown adapter can never reach a subprocess launch.
+    """
+    if runtime.agent_adapter not in _VALID_AGENT_ADAPTERS:
+        return [
+            ValidationIssue(
+                code="CONFIG_INVALID_AGENT_ADAPTER",
+                message=(
+                    f"runtime.agent_adapter must be one of "
+                    f"{_VALID_AGENT_ADAPTERS}, got {runtime.agent_adapter!r}"
+                ),
+                source="runtime",
+                pointer="/runtime/agent_adapter",
+            )
+        ]
+    return []
 
 
 def _validate_runtime_paths(
@@ -805,43 +891,53 @@ def _validate_runtime_paths(
     """Validate that runtime paths exist on disk before any subprocess launch."""
     issues: list[ValidationIssue] = []
     if runtime.repo_cwd is not None and not runtime.repo_cwd.is_dir():
-        issues.append(ValidationIssue(
-            code="RUNTIME_REPO_CWD_MISSING",
-            message=f"repo_cwd is not a directory: {runtime.repo_cwd}",
-            source="runtime",
-            pointer="/runtime/repo_cwd",
-        ))
+        issues.append(
+            ValidationIssue(
+                code="RUNTIME_REPO_CWD_MISSING",
+                message=f"repo_cwd is not a directory: {runtime.repo_cwd}",
+                source="runtime",
+                pointer="/runtime/repo_cwd",
+            )
+        )
     for cfg in runtime.graph_mcp_configs:
         if not cfg.is_file():
-            issues.append(ValidationIssue(
-                code="RUNTIME_GRAPH_MCP_MISSING",
-                message=f"graph MCP config not found or not a file: {cfg}",
-                source="runtime",
-                pointer="/runtime/graph_mcp_configs",
-            ))
+            issues.append(
+                ValidationIssue(
+                    code="RUNTIME_GRAPH_MCP_MISSING",
+                    message=f"graph MCP config not found or not a file: {cfg}",
+                    source="runtime",
+                    pointer="/runtime/graph_mcp_configs",
+                )
+            )
     for cfg in runtime.grep_mcp_configs:
         if not cfg.is_file():
-            issues.append(ValidationIssue(
-                code="RUNTIME_GREP_MCP_MISSING",
-                message=f"grep MCP config not found or not a file: {cfg}",
-                source="runtime",
-                pointer="/runtime/grep_mcp_configs",
-            ))
+            issues.append(
+                ValidationIssue(
+                    code="RUNTIME_GREP_MCP_MISSING",
+                    message=f"grep MCP config not found or not a file: {cfg}",
+                    source="runtime",
+                    pointer="/runtime/grep_mcp_configs",
+                )
+            )
     if runtime.skill_file is not None and not runtime.skill_file.is_file():
-        issues.append(ValidationIssue(
-            code="RUNTIME_SKILL_FILE_MISSING",
-            message=f"skill_file not found or not a file: {runtime.skill_file}",
-            source="runtime",
-            pointer="/runtime/skill_file",
-        ))
+        issues.append(
+            ValidationIssue(
+                code="RUNTIME_SKILL_FILE_MISSING",
+                message=f"skill_file not found or not a file: {runtime.skill_file}",
+                source="runtime",
+                pointer="/runtime/skill_file",
+            )
+        )
     for d in runtime.plugin_dirs:
         if not d.exists():
-            issues.append(ValidationIssue(
-                code="RUNTIME_PLUGIN_DIR_MISSING",
-                message=f"plugin_dir not found: {d}",
-                source="runtime",
-                pointer="/runtime/plugin_dirs",
-            ))
+            issues.append(
+                ValidationIssue(
+                    code="RUNTIME_PLUGIN_DIR_MISSING",
+                    message=f"plugin_dir not found: {d}",
+                    source="runtime",
+                    pointer="/runtime/plugin_dirs",
+                )
+            )
     return issues
 
 
@@ -878,9 +974,12 @@ def _build_planned_runs(
     config: ExperimentConfig, runtime: RuntimeFields | None
 ) -> tuple[PlannedRun, ...]:
     """Build one PlannedRun per condition x repeat with deterministic run IDs."""
-    agent_model = (
-        runtime.agent_model if runtime is not None else DEFAULT_AGENT_MODEL
-    )
+    if runtime is not None:
+        agent_adapter = runtime.agent_adapter
+        agent_model = runtime.agent_model
+    else:
+        agent_adapter = DEFAULT_AGENT_ADAPTER
+        agent_model = DEFAULT_AGENT_MODEL
     runs: list[PlannedRun] = []
     for cond in config.conditions:
         for repeat in range(1, config.repeats + 1):
@@ -889,16 +988,18 @@ def _build_planned_runs(
                 case_id=config.case_id,
                 task_type=config.task_type,
                 tool_policy=cond.tool_policy,
-                agent="claude-code",
+                agent=agent_adapter,
                 agent_model=agent_model,
             )
-            runs.append(PlannedRun(
-                run_id=run_id,
-                condition_id=cond.id,
-                tool_policy=cond.tool_policy,
-                repeat=repeat,
-                identity=identity,
-            ))
+            runs.append(
+                PlannedRun(
+                    run_id=run_id,
+                    condition_id=cond.id,
+                    tool_policy=cond.tool_policy,
+                    repeat=repeat,
+                    identity=identity,
+                )
+            )
     return tuple(runs)
 
 
@@ -907,58 +1008,58 @@ def _build_planned_runs(
 # --------------------------------------------------------------------------- #
 
 
-def _default_adapter_factory(
-    run: PlannedRun, plan: DispatchPlan
-) -> ClaudeCodeAgentAdapter:
-    """Construct a ClaudeCodeAgentAdapter for a planned run.
+def _default_adapter_factory(run: PlannedRun, plan: DispatchPlan) -> AgentAdapter:
+    """Construct the selected AgentAdapter for a planned run (AIS-014).
 
-    Selects ONLY the MCP configs matching the run's ``tool_policy``,
-    enforcing Graph/Grep isolation at adapter construction time. A Graph run
-    receives only ``graph_mcp_configs``; a Grep run receives only
-    ``grep_mcp_configs``; a Mixed run receives both.
+    The adapter is chosen by ``runtime.agent_adapter`` (default ``claude-code``,
+    selecting :class:`ClaudeCodeAgentAdapter`; ``opencode`` selects
+    :class:`OpenCodeAgentAdapter`). For both adapters the policy-scoped MCP and
+    skill selection is identical, so Graph/Grep and skill isolation remain
+    unchanged across adapters:
 
-    Skill isolation (AIS-012, F2): the configured skill is injected only into
-    runs whose policy grants Graph tool access (graph, mixed); a Grep run
-    receives no skill (``skill_text``/``skill_file`` are suppressed), so the
-    Graph Skill text cannot contaminate the Grep baseline. The adapter
-    fail-closes if a skill ever reaches a Grep run regardless.
+    * Graph/Grep MCP isolation (S15.1): a Graph run receives only
+      ``graph_mcp_configs``; a Grep run receives only ``grep_mcp_configs``; a
+      Mixed run receives both. Each adapter fail-closes in its own
+      ``_select_mcp_configs`` if Graph configs leak into a Grep run.
+    * Skill isolation (AIS-012, F2): the configured skill is injected only into
+      runs whose policy grants Graph tool access (graph, mixed); a Grep run
+      receives no skill (``skill_text``/``skill_file`` are suppressed), so the
+      Graph Skill text cannot contaminate the Grep baseline. Each adapter
+      fail-closes if a skill ever reaches a Grep run regardless.
+    * For Grep runs the default Graph tool-name patterns are cleared using the
+      adapter's own patterns type so ``_select_mcp_configs('grep')`` does not
+      fail closed; Graph and Mixed runs keep the default patterns.
 
-    For Grep runs the default Graph tool-name patterns
-    (``(^mcp__gitnexus,)``) are explicitly cleared. The adapter fails closed
-    in ``_select_mcp_configs`` if any Graph tool-name patterns are configured
-    for a Grep run; without clearing them, every real Grep adapter would
-    raise ``AgentPolicyConfigError`` before it could execute. Graph and Mixed
-    runs keep the default patterns (Graph tools are expected there).
+    Adapter-specific construction (invariant): Claude receives its existing
+    ``plugin_dirs`` and ``permission_mode`` fields; OpenCode receives only the
+    fields it supports (no plugins, no permission mode - it enforces its own
+    deny-by-default permission system). ``runtime.agent_model`` is passed
+    unchanged to either adapter.
     """
     runtime = plan.runtime
     assert runtime is not None  # checked by execute_dispatch
 
+    # -- Policy-scoped MCP selection (identical for both adapters) ----------- #
     if run.tool_policy == "graph":
         graph_mcp = runtime.graph_mcp_configs
         grep_mcp: tuple[Path, ...] = ()
-        tool_name_patterns: ToolNamePatterns | None = None
     elif run.tool_policy == "grep":
         graph_mcp = ()
         grep_mcp = runtime.grep_mcp_configs
-        # Clear Graph tool-name patterns so the adapter does not fail closed
-        # in _select_mcp_configs for grep policy.
-        tool_name_patterns = ToolNamePatterns(graph=())
     elif run.tool_policy == "mixed":
         graph_mcp = runtime.graph_mcp_configs
         grep_mcp = runtime.grep_mcp_configs
-        tool_name_patterns = None
     else:
         raise DispatchError(f"unknown tool_policy: {run.tool_policy!r}")
 
-    # Skill isolation (AIS-012, F2): the configured skill is the Graph Skill,
-    # a Graph-tool resource. Inject it only into runs whose policy grants
-    # Graph tool access (graph, mixed); a Grep run receives no skill input at
-    # all, so the Graph Skill text cannot contaminate the Grep baseline. This
-    # mirrors the per-policy MCP selection above, and the adapter fail-closes
-    # if a skill ever reaches a Grep run (see build_command). The config
-    # contract keeps a single global ``skill_file``/``skill_text`` field; the
-    # dispatcher applies it Graph-only rather than relying on a global
-    # resource reaching Grep.
+    # -- Skill isolation (AIS-012, F2; identical for both adapters) ---------- #
+    # The configured skill is the Graph Skill, a Graph-tool resource. Inject it
+    # only into runs whose policy grants Graph tool access (graph, mixed); a
+    # Grep run receives no skill at all, so the Graph Skill text cannot
+    # contaminate the Grep baseline. The config contract keeps a single global
+    # ``skill_file``/``skill_text`` field; the dispatcher applies it Graph-only
+    # rather than relying on a global resource reaching Grep. Each adapter
+    # fail-closes if a skill ever reaches a Grep run (defense-in-depth).
     if run.tool_policy == "grep":
         skill_text: str | None = None
         skill_file: Path | None = None
@@ -966,6 +1067,35 @@ def _default_adapter_factory(
         skill_text = runtime.skill_text
         skill_file = runtime.skill_file
 
+    # -- Adapter selection (AIS-014) ----------------------------------------- #
+    if runtime.agent_adapter == "opencode":
+        # Clear Graph tool-name patterns for Grep runs using the OpenCode
+        # patterns type so _select_mcp_configs('grep') does not fail closed.
+        opencode_patterns = (
+            OpenCodeToolNamePatterns(graph=()) if run.tool_policy == "grep" else None
+        )
+        return OpenCodeAgentAdapter(
+            prompt=plan.case_prompt,
+            case_id=run.identity.case_id,
+            task_type=run.identity.task_type,
+            agent_model=runtime.agent_model,
+            repo_cwd=runtime.repo_cwd,
+            graph_mcp_configs=graph_mcp,
+            grep_mcp_configs=grep_mcp,
+            skill_text=skill_text,
+            skill_file=skill_file,
+            tool_name_patterns=opencode_patterns,
+        )
+
+    if runtime.agent_adapter != DEFAULT_AGENT_ADAPTER:
+        # Defense-in-depth: validate_experiment_config should have rejected an
+        # unknown adapter before execution (CONFIG_INVALID_AGENT_ADAPTER). Never
+        # silently construct a Claude adapter for an unrecognized value.
+        raise DispatchError(f"unknown agent_adapter: {runtime.agent_adapter!r}")
+
+    # claude-code (default): clear Graph tool-name patterns for Grep runs so the
+    # adapter does not fail closed in _select_mcp_configs for grep policy.
+    claude_patterns = ToolNamePatterns(graph=()) if run.tool_policy == "grep" else None
     return ClaudeCodeAgentAdapter(
         prompt=plan.case_prompt,
         case_id=run.identity.case_id,
@@ -978,7 +1108,7 @@ def _default_adapter_factory(
         skill_text=skill_text,
         skill_file=skill_file,
         permission_mode=runtime.permission_mode,
-        tool_name_patterns=tool_name_patterns,
+        tool_name_patterns=claude_patterns,
     )
 
 

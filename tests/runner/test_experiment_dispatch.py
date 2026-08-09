@@ -52,12 +52,8 @@ FORMAL_CONFIG = REPO_ROOT / "experiments" / "qwenpaw-corrupt-inbox-formal-v1.yam
 # elsewhere.
 FORMAL_REPO_CWD = Path(r"F:\develop\codes\QwenPaw\QwenPaw")
 FORMAL_GRAPH_MCP = Path(r"F:\develop\00-codes\benchmark-runtime\mcp\.mcp.json")
-FORMAL_GRAPH_SKILL = Path(
-    r"F:\develop\00-codes\benchmark-runtime\skills\gitnexus-guide\SKILL.md"
-)
-FORMAL_RUNS_ROOT = Path(
-    r"F:\develop\00-codes\benchmark-runtime\runs\GraphBenchmark-ai-score-v1"
-)
+FORMAL_GRAPH_SKILL = Path(r"F:\develop\00-codes\benchmark-runtime\skills\gitnexus-guide\SKILL.md")
+FORMAL_RUNS_ROOT = Path(r"F:\develop\00-codes\benchmark-runtime\runs\GraphBenchmark-ai-score-v1")
 FORMAL_REPO_REVISION = "09fc515c88a5e817870e6b975e66b5be81893e03"
 
 CASE_ID = "test-bug-case"
@@ -226,9 +222,7 @@ class FakeAdapter:
         self._raises = raises
         self.calls: list[tuple[str, str, str]] = []
 
-    def execute(
-        self, *, case_id: str, task_type: str, tool_policy: str
-    ) -> br.AgentRunOutcome:
+    def execute(self, *, case_id: str, task_type: str, tool_policy: str) -> br.AgentRunOutcome:
         self.calls.append((case_id, task_type, tool_policy))
         if self._raises is not None:
             raise self._raises
@@ -264,11 +258,10 @@ def _make_fake_factory(
         }
 
     def factory(run: PlannedRun, plan: DispatchPlan) -> FakeAdapter:
-        kinds = tool_kinds_by_policy.get(
-            run.tool_policy, (ToolKind.GRAPH,)
-        )
+        kinds = tool_kinds_by_policy.get(run.tool_policy, (ToolKind.GRAPH,))
         return FakeAdapter(
-            run, plan,
+            run,
+            plan,
             raw=raw or b'{"status":"completed","answer":{"summary":"","explanation":""}}',
             tool_kinds=kinds,
             raises=raises,
@@ -279,11 +272,7 @@ def _make_fake_factory(
 
 def _formal_runtime_resources_exist() -> bool:
     """Whether the machine-specific formal runtime resources are on disk."""
-    return (
-        FORMAL_REPO_CWD.is_dir()
-        and FORMAL_GRAPH_MCP.is_file()
-        and FORMAL_GRAPH_SKILL.is_file()
-    )
+    return FORMAL_REPO_CWD.is_dir() and FORMAL_GRAPH_MCP.is_file() and FORMAL_GRAPH_SKILL.is_file()
 
 
 # Tests that construct adapters or assert clean validation require the
@@ -392,6 +381,7 @@ class TestFormalConfig:
         # Runtime fields pin the frozen absolute paths and agent identity.
         assert config.runtime is not None
         rt = config.runtime
+        assert rt.agent_adapter == "claude-code"  # AIS-014: defaults to claude-code
         assert rt.agent_model == "glm-5.2"
         assert rt.permission_mode == "auto"
         assert rt.repo_cwd == FORMAL_REPO_CWD
@@ -418,8 +408,16 @@ class TestFormalConfig:
 
         secret_keys = frozenset(
             {
-                "api_key", "apikey", "token", "secret", "password", "passwd",
-                "credential", "credentials", "access_key", "private_key",
+                "api_key",
+                "apikey",
+                "token",
+                "secret",
+                "password",
+                "passwd",
+                "credential",
+                "credentials",
+                "access_key",
+                "private_key",
                 "auth_token",
             }
         )
@@ -502,9 +500,7 @@ class TestFormalConfig:
         # Grep MCP selection does not fail closed (P1 fix) and yields the empty
         # Grep set.
         assert grep_adapter._select_mcp_configs("grep") == ()
-        assert graph_adapter._select_mcp_configs("graph") == (
-            str(FORMAL_GRAPH_MCP),
-        )
+        assert graph_adapter._select_mcp_configs("graph") == (str(FORMAL_GRAPH_MCP),)
         # Skill isolation (AIS-012, F2): the Graph run receives the configured
         # Graph Skill; the Grep run receives no skill at all, so the Graph
         # Skill text cannot contaminate the Grep baseline.
@@ -527,11 +523,15 @@ class TestFormalConfig:
 
         buf = io.StringIO()
         with redirect_stdout(buf):
-            rc = br.main([
-                "dispatch", str(FORMAL_CONFIG),
-                "--repo-root", str(REPO_ROOT),
-                "--validate-only",
-            ])
+            rc = br.main(
+                [
+                    "dispatch",
+                    str(FORMAL_CONFIG),
+                    "--repo-root",
+                    str(REPO_ROOT),
+                    "--validate-only",
+                ]
+            )
         assert rc == 0
         assert "valid" in buf.getvalue().lower()
 
@@ -543,11 +543,15 @@ class TestFormalConfig:
 
         buf = io.StringIO()
         with redirect_stdout(buf):
-            rc = br.main([
-                "dispatch", str(FORMAL_CONFIG),
-                "--repo-root", str(REPO_ROOT),
-                "--dry-run",
-            ])
+            rc = br.main(
+                [
+                    "dispatch",
+                    str(FORMAL_CONFIG),
+                    "--repo-root",
+                    str(REPO_ROOT),
+                    "--dry-run",
+                ]
+            )
         out = buf.getvalue()
         assert rc == 0
         assert "6 planned run" in out
@@ -567,9 +571,7 @@ class TestExecutableConfig:
         case = _write_case(tmp_path)
         gt = _write_gt(tmp_path)
         rt = _full_runtime(tmp_path)
-        cfg = _write_config(
-            tmp_path, case_path=case, gt_path=gt, runtime=rt
-        )
+        cfg = _write_config(tmp_path, case_path=case, gt_path=gt, runtime=rt)
         config = load_experiment_config(cfg)
         assert config.status == "executable"
         assert config.runtime is not None
@@ -581,9 +583,7 @@ class TestExecutableConfig:
         case = _write_case(tmp_path)
         gt = _write_gt(tmp_path)
         rt = _full_runtime(tmp_path)
-        cfg = _write_config(
-            tmp_path, case_path=case, gt_path=gt, runtime=rt
-        )
+        cfg = _write_config(tmp_path, case_path=case, gt_path=gt, runtime=rt)
         config = load_experiment_config(cfg)
         issues = validate_experiment_config(config)
         assert issues == [], [str(i) for i in issues]
@@ -593,9 +593,7 @@ class TestExecutableConfig:
         case = _write_case(tmp_path)
         gt = _write_gt(tmp_path)
         rt = _full_runtime(tmp_path)
-        cfg = _write_config(
-            tmp_path, case_path=case, gt_path=gt, runtime=rt, repeats=2
-        )
+        cfg = _write_config(tmp_path, case_path=case, gt_path=gt, runtime=rt, repeats=2)
         config = load_experiment_config(cfg)
         plan = build_dispatch_plan(config)
         assert plan.is_executable
@@ -620,9 +618,7 @@ class TestExecutableConfig:
         case = _write_case(tmp_path)
         gt = _write_gt(tmp_path)
         rt = _full_runtime(tmp_path)
-        cfg = _write_config(
-            tmp_path, case_path=case, gt_path=gt, runtime=rt
-        )
+        cfg = _write_config(tmp_path, case_path=case, gt_path=gt, runtime=rt)
         config = load_experiment_config(cfg)
         plan = build_dispatch_plan(config)
         assert plan.case_prompt == "What is the root cause of the corrupt-inbox bug?"
@@ -631,9 +627,7 @@ class TestExecutableConfig:
         case = _write_case(tmp_path)
         gt = _write_gt(tmp_path)
         rt = _full_runtime(tmp_path)
-        cfg = _write_config(
-            tmp_path, case_path=case, gt_path=gt, runtime=rt
-        )
+        cfg = _write_config(tmp_path, case_path=case, gt_path=gt, runtime=rt)
         config = load_experiment_config(cfg)
         override = RuntimeFields(
             agent_model="glm-5.2",
@@ -645,16 +639,12 @@ class TestExecutableConfig:
         plan = build_dispatch_plan(config, runtime=override)
         assert plan.case_prompt == "OVERRIDE PROMPT"
 
-    def test_execute_with_fake_adapter_pairing(
-        self, tmp_path: Path
-    ) -> None:
+    def test_execute_with_fake_adapter_pairing(self, tmp_path: Path) -> None:
         """Execution dispatches Graph and Grep runs with correct pairing."""
         case = _write_case(tmp_path)
         gt = _write_gt(tmp_path)
         rt = _full_runtime(tmp_path)
-        cfg = _write_config(
-            tmp_path, case_path=case, gt_path=gt, runtime=rt, repeats=2
-        )
+        cfg = _write_config(tmp_path, case_path=case, gt_path=gt, runtime=rt, repeats=2)
         config = load_experiment_config(cfg)
         plan = build_dispatch_plan(config)
 
@@ -669,15 +659,11 @@ class TestExecutableConfig:
             assert r.status is RunStatus.AWAITING_JUDGE
             assert r.policy_valid
 
-    def test_execute_repeats_produce_distinct_run_dirs(
-        self, tmp_path: Path
-    ) -> None:
+    def test_execute_repeats_produce_distinct_run_dirs(self, tmp_path: Path) -> None:
         case = _write_case(tmp_path)
         gt = _write_gt(tmp_path)
         rt = _full_runtime(tmp_path)
-        cfg = _write_config(
-            tmp_path, case_path=case, gt_path=gt, runtime=rt, repeats=3
-        )
+        cfg = _write_config(tmp_path, case_path=case, gt_path=gt, runtime=rt, repeats=3)
         config = load_experiment_config(cfg)
         plan = build_dispatch_plan(config)
         results = execute_dispatch(
@@ -694,9 +680,7 @@ class TestExecutableConfig:
         case = _write_case(tmp_path)
         gt = _write_gt(tmp_path)
         rt = _full_runtime(tmp_path)
-        cfg = _write_config(
-            tmp_path, case_path=case, gt_path=gt, runtime=rt
-        )
+        cfg = _write_config(tmp_path, case_path=case, gt_path=gt, runtime=rt)
         config = load_experiment_config(cfg)
         plan = build_dispatch_plan(config)
         results = execute_dispatch(
@@ -738,9 +722,7 @@ class TestExecutionGuard:
     def test_execute_no_runtime_refused(self, tmp_path: Path) -> None:
         case = _write_case(tmp_path)
         gt = _write_gt(tmp_path)
-        cfg = _write_config(
-            tmp_path, case_path=case, gt_path=gt, status="executable"
-        )
+        cfg = _write_config(tmp_path, case_path=case, gt_path=gt, status="executable")
         config = load_experiment_config(cfg)
         plan = build_dispatch_plan(config)
         with pytest.raises(IncompleteRuntimeError, match="no runtime"):
@@ -856,9 +838,7 @@ class TestValidationFailures:
         case = _write_case(tmp_path)
         gt = _write_gt(tmp_path)
         rt = _full_runtime(tmp_path)
-        cfg = _write_config(
-            tmp_path, case_path=case, gt_path=gt, runtime=rt, status="bogus"
-        )
+        cfg = _write_config(tmp_path, case_path=case, gt_path=gt, runtime=rt, status="bogus")
         config = load_experiment_config(cfg)
         issues = validate_experiment_config(config)
         codes = [i.code for i in issues]
@@ -934,7 +914,10 @@ class TestValidationFailures:
         gt = _write_gt(tmp_path)
         rt = _full_runtime(tmp_path)
         cfg = _write_config(
-            tmp_path, case_path=case, gt_path=gt, runtime=rt,
+            tmp_path,
+            case_path=case,
+            gt_path=gt,
+            runtime=rt,
             conditions=[
                 {"id": "graph", "tool_policy": "graph"},
                 {"id": "graph", "tool_policy": "grep"},
@@ -948,16 +931,17 @@ class TestValidationFailures:
         plan = build_dispatch_plan(config)
         assert not plan.is_executable
 
-    def test_condition_id_sanitized_collision_rejected(
-        self, tmp_path: Path
-    ) -> None:
+    def test_condition_id_sanitized_collision_rejected(self, tmp_path: Path) -> None:
         """P2: condition IDs that sanitize to the same run-id component collide."""
         case = _write_case(tmp_path)
         gt = _write_gt(tmp_path)
         rt = _full_runtime(tmp_path)
         # "a/b" and "a*b" both sanitize to "a_b" (/ and * are unsafe chars).
         cfg = _write_config(
-            tmp_path, case_path=case, gt_path=gt, runtime=rt,
+            tmp_path,
+            case_path=case,
+            gt_path=gt,
+            runtime=rt,
             conditions=[
                 {"id": "a/b", "tool_policy": "graph"},
                 {"id": "a*b", "tool_policy": "grep"},
@@ -1000,9 +984,7 @@ class TestValidationFailures:
         with pytest.raises(ConfigValidationError):
             execute_dispatch(plan, allow_execute=True)
 
-    def test_runtime_override_bad_skill_file_rejected(
-        self, tmp_path: Path
-    ) -> None:
+    def test_runtime_override_bad_skill_file_rejected(self, tmp_path: Path) -> None:
         """P2: a bad skill_file in the override is caught as a config error."""
         case = _write_case(tmp_path)
         gt = _write_gt(tmp_path)
@@ -1022,9 +1004,7 @@ class TestValidationFailures:
         assert "RUNTIME_SKILL_FILE_MISSING" in codes
         assert not plan.is_executable
 
-    def test_runtime_override_bad_plugin_dir_rejected(
-        self, tmp_path: Path
-    ) -> None:
+    def test_runtime_override_bad_plugin_dir_rejected(self, tmp_path: Path) -> None:
         """P2: a bad plugin_dir in the override is caught as a config error."""
         case = _write_case(tmp_path)
         gt = _write_gt(tmp_path)
@@ -1093,9 +1073,7 @@ class TestRunIdSafety:
         case = _write_case(tmp_path)
         gt = _write_gt(tmp_path)
         rt = _full_runtime(tmp_path)
-        cfg = _write_config(
-            tmp_path, case_path=case, gt_path=gt, runtime=rt, repeats=12
-        )
+        cfg = _write_config(tmp_path, case_path=case, gt_path=gt, runtime=rt, repeats=12)
         config = load_experiment_config(cfg)
         plan = build_dispatch_plan(config)
         # 2 conditions x 12 repeats = 24 runs, all unique IDs.
@@ -1165,9 +1143,7 @@ class TestGraphGrepIsolation:
         assert adapter._graph_mcp_configs == ()
         assert adapter._grep_mcp_configs == (str(grep_mcp),)
 
-    def test_grep_adapter_would_fail_closed_with_graph_mcp(
-        self, tmp_path: Path
-    ) -> None:
+    def test_grep_adapter_would_fail_closed_with_graph_mcp(self, tmp_path: Path) -> None:
         """Defense-in-depth: if graph MCP configs reach a grep adapter, it
         fails closed at execute() time.
 
@@ -1200,9 +1176,7 @@ class TestGraphGrepIsolation:
                 tool_policy="grep",
             )
 
-    def test_default_factory_clears_graph_patterns_for_grep(
-        self, tmp_path: Path
-    ) -> None:
+    def test_default_factory_clears_graph_patterns_for_grep(self, tmp_path: Path) -> None:
         """P1: the default factory must clear Graph tool-name patterns for Grep.
 
         The default ``ToolNamePatterns(graph=(^mcp__gitnexus,))`` causes
@@ -1261,7 +1235,10 @@ class TestGraphGrepIsolation:
             "runs_root": str(tmp_path / "runs"),
         }
         cfg = _write_config(
-            tmp_path, case_path=case, gt_path=gt, runtime=rt,
+            tmp_path,
+            case_path=case,
+            gt_path=gt,
+            runtime=rt,
             conditions=[
                 {"id": "graph", "tool_policy": "graph"},
                 {"id": "grep", "tool_policy": "grep"},
@@ -1279,7 +1256,8 @@ class TestGraphGrepIsolation:
         # MCP config selection works for all policies (no fail-closed).
         assert graph_adapter._select_mcp_configs("graph") == (str(graph_mcp),)
         assert mixed_adapter._select_mcp_configs("mixed") == (
-            str(graph_mcp), str(grep_mcp),
+            str(graph_mcp),
+            str(grep_mcp),
         )
 
 
@@ -1410,6 +1388,323 @@ class TestGraphGrepSkillIsolation:
 
 
 # --------------------------------------------------------------------------- #
+# Agent adapter selection (AIS-014)
+# --------------------------------------------------------------------------- #
+
+
+class TestAgentAdapterSelection:
+    """``runtime.agent_adapter`` selects the adapter (claude-code default).
+
+    Covers default Claude, explicit Claude, explicit OpenCode, model/runtime
+    mapping and propagation, unknown-adapter rejection, and Graph/Grep + skill
+    isolation for the OpenCode adapter. None of these launch a real CLI: adapter
+    construction validates paths but ``execute`` is never called, and execution
+    tests inject a fake adapter factory.
+    """
+
+    def test_default_adapter_is_claude_code(self, tmp_path: Path) -> None:
+        from runner.claude_code_adapter import ClaudeCodeAgentAdapter
+        from runner.experiment_dispatch import _default_adapter_factory
+
+        case = _write_case(tmp_path)
+        gt = _write_gt(tmp_path)
+        rt = _full_runtime(tmp_path)  # no agent_adapter -> default
+        cfg = _write_config(tmp_path, case_path=case, gt_path=gt, runtime=rt)
+        config = load_experiment_config(cfg)
+        assert config.runtime is not None
+        assert config.runtime.agent_adapter == "claude-code"
+        plan = build_dispatch_plan(config)
+        run = plan.runs[0]
+        assert run.identity.agent == "claude-code"
+        adapter = _default_adapter_factory(run, plan)
+        assert isinstance(adapter, ClaudeCodeAgentAdapter)
+
+    def test_explicit_claude_code_adapter(self, tmp_path: Path) -> None:
+        from runner.claude_code_adapter import ClaudeCodeAgentAdapter
+        from runner.experiment_dispatch import _default_adapter_factory
+
+        case = _write_case(tmp_path)
+        gt = _write_gt(tmp_path)
+        rt = _full_runtime(tmp_path)
+        rt["agent_adapter"] = "claude-code"
+        cfg = _write_config(tmp_path, case_path=case, gt_path=gt, runtime=rt)
+        config = load_experiment_config(cfg)
+        assert config.runtime.agent_adapter == "claude-code"
+        plan = build_dispatch_plan(config)
+        assert all(r.identity.agent == "claude-code" for r in plan.runs)
+        adapter = _default_adapter_factory(plan.runs[0], plan)
+        assert isinstance(adapter, ClaudeCodeAgentAdapter)
+
+    def test_explicit_opencode_adapter(self, tmp_path: Path) -> None:
+        from runner.experiment_dispatch import _default_adapter_factory
+        from runner.opencode_adapter import OpenCodeAgentAdapter
+
+        case = _write_case(tmp_path)
+        gt = _write_gt(tmp_path)
+        rt = _full_runtime(tmp_path)
+        rt["agent_adapter"] = "opencode"
+        cfg = _write_config(tmp_path, case_path=case, gt_path=gt, runtime=rt)
+        config = load_experiment_config(cfg)
+        assert config.runtime.agent_adapter == "opencode"
+        plan = build_dispatch_plan(config)
+        # Identity agent mapping: the adapter name is recorded in RunIdentity.
+        assert all(r.identity.agent == "opencode" for r in plan.runs)
+        adapter = _default_adapter_factory(plan.runs[0], plan)
+        assert isinstance(adapter, OpenCodeAgentAdapter)
+
+    def test_agent_model_propagates_to_identity_and_adapter(self, tmp_path: Path) -> None:
+        """An explicit agent_model reaches RunIdentity and the adapter unchanged."""
+        from runner.experiment_dispatch import _default_adapter_factory
+        from runner.opencode_adapter import OpenCodeAgentAdapter
+
+        case = _write_case(tmp_path)
+        gt = _write_gt(tmp_path)
+        rt = _full_runtime(tmp_path)
+        rt["agent_adapter"] = "opencode"
+        rt["agent_model"] = "provider/test-model-xyz"
+        cfg = _write_config(tmp_path, case_path=case, gt_path=gt, runtime=rt)
+        config = load_experiment_config(cfg)
+        assert config.runtime.agent_model == "provider/test-model-xyz"
+        plan = build_dispatch_plan(config)
+        run = plan.runs[0]
+        assert run.identity.agent == "opencode"
+        assert run.identity.agent_model == "provider/test-model-xyz"
+        adapter = _default_adapter_factory(run, plan)
+        assert isinstance(adapter, OpenCodeAgentAdapter)
+        assert adapter._agent_model == "provider/test-model-xyz"
+
+    def test_opencode_default_model_when_unspecified(self, tmp_path: Path) -> None:
+        """Model/runtime mapping: opencode without agent_model uses its default."""
+        from runner.opencode_adapter import (
+            DEFAULT_AGENT_MODEL as OPENCODE_DEFAULT_MODEL,
+        )
+
+        case = _write_case(tmp_path)
+        gt = _write_gt(tmp_path)
+        rt = _full_runtime(tmp_path)
+        rt["agent_adapter"] = "opencode"
+        rt.pop("agent_model")  # rely on the adapter-specific default
+        cfg = _write_config(tmp_path, case_path=case, gt_path=gt, runtime=rt)
+        config = load_experiment_config(cfg)
+        assert config.runtime.agent_adapter == "opencode"
+        assert config.runtime.agent_model == OPENCODE_DEFAULT_MODEL
+        plan = build_dispatch_plan(config)
+        assert plan.runs[0].identity.agent_model == OPENCODE_DEFAULT_MODEL
+
+    def test_claude_default_model_preserved_when_unspecified(self, tmp_path: Path) -> None:
+        """Model/runtime mapping: claude-code without agent_model keeps its default."""
+        from runner.claude_code_adapter import (
+            DEFAULT_AGENT_MODEL as CLAUDE_DEFAULT_MODEL,
+        )
+
+        case = _write_case(tmp_path)
+        gt = _write_gt(tmp_path)
+        rt = _full_runtime(tmp_path)
+        rt.pop("agent_model")  # no adapter, no model -> both default
+        cfg = _write_config(tmp_path, case_path=case, gt_path=gt, runtime=rt)
+        config = load_experiment_config(cfg)
+        assert config.runtime.agent_adapter == "claude-code"
+        assert config.runtime.agent_model == CLAUDE_DEFAULT_MODEL
+
+    def test_unknown_adapter_rejected(self, tmp_path: Path) -> None:
+        """An unknown agent_adapter is rejected before any subprocess launch."""
+        case = _write_case(tmp_path)
+        gt = _write_gt(tmp_path)
+        rt = _full_runtime(tmp_path)
+        rt["agent_adapter"] = "bogus-adapter"
+        cfg = _write_config(tmp_path, case_path=case, gt_path=gt, runtime=rt)
+        config = load_experiment_config(cfg)
+        issues = validate_experiment_config(config)
+        codes = [i.code for i in issues]
+        assert "CONFIG_INVALID_AGENT_ADAPTER" in codes
+        # The plan is not executable.
+        plan = build_dispatch_plan(config)
+        assert not plan.is_executable
+        with pytest.raises(ConfigValidationError):
+            execute_dispatch(plan, allow_execute=True)
+
+    def test_unknown_adapter_in_override_rejected(self, tmp_path: Path) -> None:
+        """A bad agent_adapter in a runtime override is also caught (P2)."""
+        case = _write_case(tmp_path)
+        gt = _write_gt(tmp_path)
+        rt = _full_runtime(tmp_path)
+        cfg = _write_config(tmp_path, case_path=case, gt_path=gt, runtime=rt)
+        config = load_experiment_config(cfg)
+        override = RuntimeFields(
+            agent_adapter="nope",
+            agent_model="glm-5.2",
+            repo_cwd=config.runtime.repo_cwd,
+            graph_mcp_configs=config.runtime.graph_mcp_configs,
+            runs_root=tmp_path / "runs",
+            case_prompt="override",
+        )
+        plan = build_dispatch_plan(config, runtime=override)
+        codes = [i.code for i in plan.validation_issues]
+        assert "CONFIG_INVALID_AGENT_ADAPTER" in codes
+        assert not plan.is_executable
+
+    def test_opencode_graph_grep_mcp_isolation(self, tmp_path: Path) -> None:
+        """OpenCode: Graph run gets only Graph MCP; Grep run gets only Grep MCP.
+
+        Graph patterns are cleared for the Grep run (using the OpenCode patterns
+        type) so ``_select_mcp_configs('grep')`` does not fail closed; Graph and
+        Mixed runs keep the default Graph patterns. Adapter construction does NOT
+        launch a subprocess (``execute`` is never called).
+        """
+        from runner.experiment_dispatch import _default_adapter_factory
+        from runner.opencode_adapter import OpenCodeAgentAdapter
+
+        case = _write_case(tmp_path)
+        gt = _write_gt(tmp_path)
+        graph_mcp = _write_mcp_config(tmp_path, "graph.json")
+        grep_mcp = _write_mcp_config(tmp_path, "grep.json")
+        repo_dir = tmp_path / "repo"
+        repo_dir.mkdir()
+        rt = {
+            "agent_adapter": "opencode",
+            "agent_model": "ark-plan-qlw/deepseek-v4-flash",
+            "repo_cwd": str(repo_dir),
+            "graph_mcp_configs": [str(graph_mcp)],
+            "grep_mcp_configs": [str(grep_mcp)],
+            "runs_root": str(tmp_path / "runs"),
+        }
+        cfg = _write_config(
+            tmp_path,
+            case_path=case,
+            gt_path=gt,
+            runtime=rt,
+            conditions=[
+                {"id": "graph", "tool_policy": "graph"},
+                {"id": "grep", "tool_policy": "grep"},
+                {"id": "mixed", "tool_policy": "mixed"},
+            ],
+        )
+        config = load_experiment_config(cfg)
+        plan = build_dispatch_plan(config)
+
+        graph_adapter = _default_adapter_factory(plan.runs[0], plan)
+        grep_adapter = _default_adapter_factory(plan.runs[1], plan)
+        mixed_adapter = _default_adapter_factory(plan.runs[2], plan)
+        assert isinstance(graph_adapter, OpenCodeAgentAdapter)
+        assert isinstance(grep_adapter, OpenCodeAgentAdapter)
+        assert isinstance(mixed_adapter, OpenCodeAgentAdapter)
+        # Graph run: only graph MCP; default Graph patterns preserved.
+        assert graph_adapter._graph_mcp_configs == (graph_mcp,)
+        assert graph_adapter._grep_mcp_configs == ()
+        assert graph_adapter._tool_name_patterns.graph == (r"^gitnexus_",)
+        # Grep run: only grep MCP; Graph patterns cleared.
+        assert grep_adapter._graph_mcp_configs == ()
+        assert grep_adapter._grep_mcp_configs == (grep_mcp,)
+        assert grep_adapter._tool_name_patterns.graph == ()
+        # Mixed run: both MCP sets; default Graph patterns preserved.
+        assert mixed_adapter._graph_mcp_configs == (graph_mcp,)
+        assert mixed_adapter._grep_mcp_configs == (grep_mcp,)
+        assert mixed_adapter._tool_name_patterns.graph == (r"^gitnexus_",)
+        # Selection does not fail closed for any policy.
+        assert graph_adapter._select_mcp_configs("graph") == (graph_mcp,)
+        assert grep_adapter._select_mcp_configs("grep") == (grep_mcp,)
+        assert mixed_adapter._select_mcp_configs("mixed") == (
+            graph_mcp,
+            grep_mcp,
+        )
+
+    def test_opencode_skill_isolation(self, tmp_path: Path) -> None:
+        """OpenCode: the Graph Skill reaches Graph/Mixed runs only, never Grep.
+
+        OpenCode has no ``--append-system-prompt`` flag; the skill is prepended
+        to the prompt (``_compose_prompt``). The Grep run's composed prompt
+        carries no skill text, so the Graph Skill cannot contaminate the Grep
+        baseline (F2).
+        """
+        from runner.experiment_dispatch import _default_adapter_factory
+        from runner.opencode_adapter import OpenCodeAgentAdapter
+
+        case = _write_case(tmp_path)
+        gt = _write_gt(tmp_path)
+        rt = _full_runtime_with_skill(tmp_path)
+        rt["agent_adapter"] = "opencode"
+        cfg = _write_config(
+            tmp_path,
+            case_path=case,
+            gt_path=gt,
+            runtime=rt,
+            conditions=[
+                {"id": "graph", "tool_policy": "graph"},
+                {"id": "grep", "tool_policy": "grep"},
+                {"id": "mixed", "tool_policy": "mixed"},
+            ],
+        )
+        config = load_experiment_config(cfg)
+        plan = build_dispatch_plan(config)
+
+        graph_adapter = _default_adapter_factory(plan.runs[0], plan)
+        grep_adapter = _default_adapter_factory(plan.runs[1], plan)
+        mixed_adapter = _default_adapter_factory(plan.runs[2], plan)
+        assert isinstance(graph_adapter, OpenCodeAgentAdapter)
+        # Graph and Mixed runs carry the skill; Grep does not.
+        assert graph_adapter._skill_text == FORMAL_GRAPH_SKILL_TEXT_MARKER
+        assert mixed_adapter._skill_text == FORMAL_GRAPH_SKILL_TEXT_MARKER
+        assert grep_adapter._skill_text is None
+        # The composed prompt (after the last --) reflects the skill for
+        # Graph/Mixed only; OpenCode prepends skill text to the prompt.
+        graph_argv = graph_adapter.build_command(tool_policy="graph", prompt="p")
+        grep_argv = grep_adapter.build_command(tool_policy="grep", prompt="p")
+        mixed_argv = mixed_adapter.build_command(tool_policy="mixed", prompt="p")
+        assert graph_argv[-1] == FORMAL_GRAPH_SKILL_TEXT_MARKER + "\n\n" + "p"
+        assert mixed_argv[-1] == FORMAL_GRAPH_SKILL_TEXT_MARKER + "\n\n" + "p"
+        assert grep_argv[-1] == "p"
+
+    def test_opencode_adapter_receives_no_plugin_or_permission_fields(self, tmp_path: Path) -> None:
+        """OpenCode is constructed without plugin_dirs/permission_mode (invariant).
+
+        The config may declare ``permission_mode``/``plugin_dirs`` (Claude-only
+        fields); the OpenCode factory path must not forward them - OpenCode has
+        its own deny-by-default permission system and no plugin concept.
+        """
+        from runner.experiment_dispatch import _default_adapter_factory
+        from runner.opencode_adapter import OpenCodeAgentAdapter
+
+        case = _write_case(tmp_path)
+        gt = _write_gt(tmp_path)
+        plugin_dir = tmp_path / "plugins"
+        plugin_dir.mkdir()
+        rt = _full_runtime(tmp_path)
+        rt["agent_adapter"] = "opencode"
+        rt["permission_mode"] = "plan"  # a Claude-only field
+        rt["plugin_dirs"] = [str(plugin_dir)]  # a Claude-only field
+        cfg = _write_config(tmp_path, case_path=case, gt_path=gt, runtime=rt)
+        config = load_experiment_config(cfg)
+        plan = build_dispatch_plan(config)
+        adapter = _default_adapter_factory(plan.runs[0], plan)
+        assert isinstance(adapter, OpenCodeAgentAdapter)
+        # OpenCode exposes no plugin_dirs / permission_mode attributes.
+        assert not hasattr(adapter, "_plugin_dirs")
+        assert not hasattr(adapter, "_permission_mode")
+
+    def test_execute_with_opencode_identity_and_fake_factory(self, tmp_path: Path) -> None:
+        """Execution with an opencode config dispatches runs with opencode identity."""
+        case = _write_case(tmp_path)
+        gt = _write_gt(tmp_path)
+        rt = _full_runtime(tmp_path)
+        rt["agent_adapter"] = "opencode"
+        cfg = _write_config(tmp_path, case_path=case, gt_path=gt, runtime=rt, repeats=2)
+        config = load_experiment_config(cfg)
+        plan = build_dispatch_plan(config)
+        # Every planned run carries the opencode adapter in its identity.
+        assert all(r.identity.agent == "opencode" for r in plan.runs)
+
+        results = execute_dispatch(
+            plan,
+            allow_execute=True,
+            adapter_factory=_make_fake_factory(),
+        )
+        assert len(results) == 4  # 2 conditions x 2 repeats
+        for r in results:
+            assert r.status is RunStatus.AWAITING_JUDGE
+            assert r.policy_valid
+
+
+# --------------------------------------------------------------------------- #
 # Patched execute_run: verifies dispatch calls execute_run, not bypass
 # --------------------------------------------------------------------------- #
 
@@ -1423,9 +1718,7 @@ class TestPatchedExecuteRun:
         case = _write_case(tmp_path)
         gt = _write_gt(tmp_path)
         rt = _full_runtime(tmp_path)
-        cfg = _write_config(
-            tmp_path, case_path=case, gt_path=gt, runtime=rt, repeats=2
-        )
+        cfg = _write_config(tmp_path, case_path=case, gt_path=gt, runtime=rt, repeats=2)
         config = load_experiment_config(cfg)
         plan = build_dispatch_plan(config)
 
@@ -1439,12 +1732,14 @@ class TestPatchedExecuteRun:
             agent: br.AgentAdapter,
             policy_enforced: bool = True,
         ) -> RunResult:
-            calls.append({
-                "runs_root": runs_root,
-                "run_id": run_id,
-                "identity": identity,
-                "policy_enforced": policy_enforced,
-            })
+            calls.append(
+                {
+                    "runs_root": runs_root,
+                    "run_id": run_id,
+                    "identity": identity,
+                    "policy_enforced": policy_enforced,
+                }
+            )
             # Return a minimal completed result.
             run_dir = runs_root / run_id
             run_dir.mkdir(parents=True, exist_ok=True)
@@ -1460,9 +1755,7 @@ class TestPatchedExecuteRun:
                 manifest_path=run_dir / "manifest.json",
             )
 
-        monkeypatch.setattr(
-            "runner.experiment_dispatch.execute_run", fake_execute_run
-        )
+        monkeypatch.setattr("runner.experiment_dispatch.execute_run", fake_execute_run)
         results = execute_dispatch(
             plan,
             allow_execute=True,
@@ -1506,9 +1799,7 @@ class TestPatchedExecuteRun:
                 manifest_path=run_dir / "manifest.json",
             )
 
-        monkeypatch.setattr(
-            "runner.experiment_dispatch.execute_run", fake_execute_run
-        )
+        monkeypatch.setattr("runner.experiment_dispatch.execute_run", fake_execute_run)
         execute_dispatch(
             plan,
             allow_execute=True,
@@ -1525,9 +1816,7 @@ class TestPatchedExecuteRun:
 class TestNaturalLanguageAnswer:
     """The dispatcher must not fabricate answer JSON or metrics."""
 
-    def test_markdown_answer_flows_through_execution(
-        self, tmp_path: Path
-    ) -> None:
+    def test_markdown_answer_flows_through_execution(self, tmp_path: Path) -> None:
         """A natural-language (non-JSON) answer is preserved by runner.execution."""
         case = _write_case(tmp_path)
         gt = _write_gt(tmp_path)
@@ -1545,22 +1834,16 @@ class TestNaturalLanguageAnswer:
         assert len(results) == 2
         for r in results:
             # Schema-warning status: natural language preserved verbatim.
-            assert r.agent_answer_status is (
-                AgentAnswerStatus.COMPLETED_WITH_SCHEMA_WARNING
-            )
+            assert r.agent_answer_status is (AgentAnswerStatus.COMPLETED_WITH_SCHEMA_WARNING)
             assert r.status is RunStatus.AWAITING_JUDGE
             # The raw response is preserved on disk unchanged.
             raw = (r.run_dir / "raw-response.txt").read_bytes()
             assert raw == markdown
             # The explanation carries the original text.
-            answer = json.loads(
-                (r.run_dir / "agent-answer.json").read_text(encoding="utf-8")
-            )
+            answer = json.loads((r.run_dir / "agent-answer.json").read_text(encoding="utf-8"))
             assert answer["answer"]["explanation"] == markdown.decode("utf-8")
 
-    def test_dispatcher_does_not_create_judge_artifacts(
-        self, tmp_path: Path
-    ) -> None:
+    def test_dispatcher_does_not_create_judge_artifacts(self, tmp_path: Path) -> None:
         case = _write_case(tmp_path)
         gt = _write_gt(tmp_path)
         rt = _full_runtime(tmp_path)
@@ -1599,13 +1882,15 @@ class TestCLICompatibility:
 
         buf = io.StringIO()
         with redirect_stdout(buf):
-            rc = br.main([
-                "dispatch",
-                str(SMOKE_CONFIG),
-                "--repo-root",
-                str(REPO_ROOT),
-                "--validate-only",
-            ])
+            rc = br.main(
+                [
+                    "dispatch",
+                    str(SMOKE_CONFIG),
+                    "--repo-root",
+                    str(REPO_ROOT),
+                    "--validate-only",
+                ]
+            )
         assert rc == 0
         assert "valid" in buf.getvalue().lower()
 
@@ -1615,13 +1900,15 @@ class TestCLICompatibility:
 
         buf = io.StringIO()
         with redirect_stdout(buf):
-            rc = br.main([
-                "dispatch",
-                str(SMOKE_CONFIG),
-                "--repo-root",
-                str(REPO_ROOT),
-                "--dry-run",
-            ])
+            rc = br.main(
+                [
+                    "dispatch",
+                    str(SMOKE_CONFIG),
+                    "--repo-root",
+                    str(REPO_ROOT),
+                    "--dry-run",
+                ]
+            )
         out = buf.getvalue()
         assert rc == 0
         # Dry-run prints planned run IDs.
@@ -1634,19 +1921,19 @@ class TestCLICompatibility:
 
         buf = io.StringIO()
         with redirect_stderr(buf):
-            rc = br.main([
-                "dispatch",
-                str(SMOKE_CONFIG),
-                "--repo-root",
-                str(REPO_ROOT),
-                "--execute",
-            ])
+            rc = br.main(
+                [
+                    "dispatch",
+                    str(SMOKE_CONFIG),
+                    "--repo-root",
+                    str(REPO_ROOT),
+                    "--execute",
+                ]
+            )
         assert rc == 2
         assert "smoke_only" in buf.getvalue()
 
-    def test_main_dispatch_validate_only_synthetic(
-        self, tmp_path: Path
-    ) -> None:
+    def test_main_dispatch_validate_only_synthetic(self, tmp_path: Path) -> None:
         import io
         from contextlib import redirect_stdout
 
@@ -1667,9 +1954,7 @@ class TestCLICompatibility:
         case = _write_case(tmp_path)
         gt = _write_gt(tmp_path)
         rt = _full_runtime(tmp_path)
-        cfg = _write_config(
-            tmp_path, case_path=case, gt_path=gt, runtime=rt, repeats=2
-        )
+        cfg = _write_config(tmp_path, case_path=case, gt_path=gt, runtime=rt, repeats=2)
         buf = io.StringIO()
         with redirect_stdout(buf):
             rc = br.main(["dispatch", str(cfg), "--dry-run"])
@@ -1688,10 +1973,15 @@ class TestCLICompatibility:
         override_runs = tmp_path / "override-runs"
         buf = io.StringIO()
         with redirect_stdout(buf):
-            rc = br.main([
-                "dispatch", str(cfg), "--dry-run",
-                "--runs-root", str(override_runs),
-            ])
+            rc = br.main(
+                [
+                    "dispatch",
+                    str(cfg),
+                    "--dry-run",
+                    "--runs-root",
+                    str(override_runs),
+                ]
+            )
         out = buf.getvalue()
         assert rc == 0
         # The plan uses the overridden runs_root.
@@ -1724,9 +2014,7 @@ class TestConfigLoading:
         with pytest.raises(DispatchError, match="must be a non-empty string"):
             load_experiment_config(p)
 
-    def test_skill_text_and_skill_file_mutually_exclusive(
-        self, tmp_path: Path
-    ) -> None:
+    def test_skill_text_and_skill_file_mutually_exclusive(self, tmp_path: Path) -> None:
         case = _write_case(tmp_path)
         gt = _write_gt(tmp_path)
         skill = tmp_path / "skill.md"

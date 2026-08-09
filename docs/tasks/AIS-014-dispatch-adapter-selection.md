@@ -1,6 +1,6 @@
 # AIS-014: Configuration-selectable AgentAdapter dispatch
 
-State: READY
+State: IMPLEMENTING
 
 ## Objective
 

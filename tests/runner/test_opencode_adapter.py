@@ -9,7 +9,7 @@ OpenCode service, never a real MCP launch, never a provider call):
 * runtime-config normalization of both ``mcpServers`` and ``mcp`` shapes,
   deny-by-default permissions, duplicate/invalid/secret-bearing configs (no
   leakage), and config injection via the env override (not argv);
-* parsing final text (message.finish + text.finish fallback), multiple
+* parsing final text (last ``text`` event wins), multiple
   text/tool events, tool classification, dedup, errored-tool skipping, token
   summation, missing usage, malformed/error streams, missing final text;
 * timeout / non-zero exit / launch failure / identity mismatch / invalid paths;
@@ -68,7 +68,7 @@ def _claude_mcp(
     args: tuple[str, ...] = ("srv.js",),
     env: dict[str, str] | None = None,
 ) -> dict[str, Any]:
-    spec: dict[str, Any] = {"command": command, "args": list(args)}
+    spec: dict[str, Any] = {"type": "stdio", "command": command, "args": list(args)}
     if env:
         spec["env"] = env
     return {"mcpServers": {name: spec}}
@@ -87,7 +87,7 @@ def _opencode_mcp(
     else:
         spec["command"] = list(command)
     if env:
-        spec["env"] = env
+        spec["environment"] = env
     if headers:
         spec["headers"] = headers
     return {"mcp": {name: spec}}
@@ -111,60 +111,84 @@ def _completed(
     )
 
 
-def _text_finish(text: str, id: str = "t1") -> str:
-    return json.dumps({"type": "text.finish", "id": id, "text": text})
+def _text_event(text: str, pid: str = "prt-t1") -> str:
+    """Build a ``text`` event (assistant text in ``part.text``)."""
+    return json.dumps({
+        "type": "text",
+        "timestamp": 1,
+        "sessionID": "ses_test",
+        "part": {"id": pid, "messageID": "msg_test", "sessionID": "ses_test",
+                  "type": "text", "text": text},
+    })
 
 
-def _tool_finish(
+def _tool_use_event(
     tool: str,
-    id: str = "tool1",
-    state: str = "completed",
+    call_id: str = "call_1",
+    status: str = "completed",
     error: Any = None,
 ) -> str:
-    rec: dict[str, Any] = {"type": "tool.finish", "id": id, "tool": tool, "state": state}
+    """Build a ``tool_use`` event (tool call in ``part.tool``/``callID``/``state``)."""
+    state: dict[str, Any] = {"status": status}
     if error is not None:
-        rec["error"] = error
-    return json.dumps(rec)
+        state["error"] = error
+    return json.dumps({
+        "type": "tool_use",
+        "timestamp": 1,
+        "sessionID": "ses_test",
+        "part": {
+            "type": "tool",
+            "tool": tool,
+            "callID": call_id,
+            "state": state,
+            "id": "prt_tool_1",
+            "messageID": "msg_test",
+            "sessionID": "ses_test",
+        },
+    })
 
 
-def _step_finish(
+def _step_finish_event(
     input_tokens: int | None = 100,
     output_tokens: int | None = 20,
-    sid: str = "s1",
+    reason: str = "stop",
 ) -> str:
-    usage: dict[str, Any] = {}
+    """Build a ``step_finish`` event (token usage in ``part.tokens``)."""
+    tokens: dict[str, Any] = {"total": 0, "reasoning": 0, "cache": {"write": 0, "read": 0}}
     if input_tokens is not None:
-        usage["input_tokens"] = input_tokens
+        tokens["input"] = input_tokens
     if output_tokens is not None:
-        usage["output_tokens"] = output_tokens
-    return json.dumps({"type": "step.finish", "id": sid, "info": {"usage": usage}})
+        tokens["output"] = output_tokens
+    return json.dumps({
+        "type": "step_finish",
+        "timestamp": 1,
+        "sessionID": "ses_test",
+        "part": {
+            "id": "prt_sf1",
+            "messageID": "msg_test",
+            "sessionID": "ses_test",
+            "type": "step-finish",
+            "reason": reason,
+            "tokens": tokens,
+            "cost": 0,
+        },
+    })
 
 
-def _message_finish(
-    role: str = "assistant",
-    texts: list[str] | None = None,
-    tool_parts: list[dict[str, Any]] | None = None,
-    message_id: str = "m1",
-) -> str:
-    parts: list[dict[str, Any]] = []
-    for i, t in enumerate(texts or []):
-        parts.append({"type": "text", "id": f"t-{i}", "text": t})
-    for i, tp in enumerate(tool_parts or []):
-        parts.append(
-            {
-                "type": "tool",
-                "id": tp.get("id", f"tool-{i}"),
-                "tool": tp["tool"],
-                "state": tp.get("state", "completed"),
-            }
-        )
-    return json.dumps(
-        {
-            "type": "message.finish",
-            "messageID": message_id,
-            "message": {"role": role, "parts": parts},
-        }
-    )
+def _step_start_event() -> str:
+    """Build a ``step_start`` event (no payload of interest)."""
+    return json.dumps({
+        "type": "step_start",
+        "timestamp": 1,
+        "sessionID": "ses_test",
+        "part": {
+            "id": "prt_ss1",
+            "messageID": "msg_test",
+            "sessionID": "ses_test",
+            "type": "step-start",
+            "snapshot": "abc",
+        },
+    })
 
 
 def _error_event(message: str = "boom") -> str:
@@ -236,7 +260,7 @@ def test_argv_default_model_is_prescribed(tmp_path: Path) -> None:
         adapter.build_command(tool_policy="graph", prompt=PROMPT)[
             adapter.build_command(tool_policy="graph", prompt=PROMPT).index("--model") + 1
         ]
-        == "ark-plan-qlw/deepseek-v4-flash"
+        == "ark-plan-lmm/deepseek-v4-flash"
     )
 
 
@@ -447,7 +471,7 @@ def test_normalize_claude_mcp_servers_shape(tmp_path: Path) -> None:
     srv = cfg["mcp"]["gitnexus"]
     assert srv["type"] == "local"
     assert srv["command"] == ["node", "a.js", "b.js"]
-    assert srv["env"] == {"K": "v"}
+    assert srv["environment"] == {"K": "v"}
     assert srv["enabled"] is True
 
 
@@ -462,7 +486,7 @@ def test_normalize_opencode_mcp_shape(tmp_path: Path) -> None:
     srv = cfg["mcp"]["gitnexus"]
     assert srv["type"] == "local"
     assert srv["command"] == ["node", "srv.js"]
-    assert srv["env"] == {"K": "v"}
+    assert srv["environment"] == {"K": "v"}
     assert srv["enabled"] is True
 
 
@@ -567,14 +591,14 @@ def test_config_injected_via_env_not_argv(tmp_path: Path) -> None:
         _claude_mcp("gitnexus", env={"API_KEY": "sk-secret-xyz"}),
     )
     adapter = _make_adapter(tmp_path, graph_mcp_configs=(gcfg,))
-    stream = _stream([_message_finish("assistant", texts=["answer"])])
+    stream = _stream([_text_event("answer")])
     with patch(_RUN, return_value=_completed(stream)) as mock_run:
         adapter.execute(case_id=CASE_ID, task_type=TASK_TYPE, tool_policy="graph")
     env = mock_run.call_args.kwargs["env"]
     assert OPENCODE_CONFIG_ENV in env
     injected = json.loads(env[OPENCODE_CONFIG_ENV])
     assert "gitnexus" in injected["mcp"]
-    assert injected["mcp"]["gitnexus"]["env"]["API_KEY"] == "sk-secret-xyz"
+    assert injected["mcp"]["gitnexus"]["environment"]["API_KEY"] == "sk-secret-xyz"
     # The config content and the secret are NOT in the argv ...
     argv = mock_run.call_args.args[0]
     assert "sk-secret-xyz" not in argv
@@ -605,7 +629,7 @@ def test_last_mcp_servers_audits_names_only(tmp_path: Path) -> None:
         _claude_mcp("gitnexus", env={"API_KEY": "sk-secret-xyz"}),
     )
     adapter = _make_adapter(tmp_path, graph_mcp_configs=(gcfg,))
-    stream = _stream([_message_finish("assistant", texts=["answer"])])
+    stream = _stream([_text_event("answer")])
     with patch(_RUN, return_value=_completed(stream)):
         adapter.execute(case_id=CASE_ID, task_type=TASK_TYPE, tool_policy="graph")
     assert adapter.last_mcp_servers == ("gitnexus",)
@@ -617,58 +641,46 @@ def test_last_mcp_servers_audits_names_only(tmp_path: Path) -> None:
 # --------------------------------------------------------------------------- #
 
 
-def test_parse_final_text_from_message_finish(tmp_path: Path) -> None:
+def test_parse_final_text_last_text_event_wins(tmp_path: Path) -> None:
     adapter = _make_adapter(tmp_path)
     stream = _stream(
         [
-            _text_finish("Let me check."),
-            _message_finish("assistant", texts=["The root cause is _load_events."]),
+            _text_event("Let me check."),
+            _text_event("The root cause is _load_events."),
         ]
     )
     parsed = adapter._parse_stream(stream)
     assert parsed.raw_response == b"The root cause is _load_events."
 
 
-def test_parse_final_text_fallback_from_text_finish(tmp_path: Path) -> None:
+def test_parse_final_text_single_text_event(tmp_path: Path) -> None:
     adapter = _make_adapter(tmp_path)
-    stream = _stream([_text_finish("Fallback answer.")])
+    stream = _stream([_text_event("Fallback answer.")])
     parsed = adapter._parse_stream(stream)
     assert parsed.raw_response == b"Fallback answer."
 
 
-def test_parse_multiple_assistant_messages_last_wins(tmp_path: Path) -> None:
+def test_parse_multiple_text_events_last_wins(tmp_path: Path) -> None:
     adapter = _make_adapter(tmp_path)
     stream = _stream(
         [
-            _message_finish("assistant", texts=["intermediate"]),
-            _message_finish("assistant", texts=["final answer"]),
+            _text_event("intermediate"),
+            _text_event("final answer"),
         ]
     )
     parsed = adapter._parse_stream(stream)
     assert parsed.raw_response == b"final answer"
 
 
-def test_parse_user_message_does_not_override_assistant(tmp_path: Path) -> None:
+def test_parse_tool_events_from_tool_use(tmp_path: Path) -> None:
     adapter = _make_adapter(tmp_path)
     stream = _stream(
         [
-            _message_finish("user", texts=["the question"]),
-            _message_finish("assistant", texts=["the answer"]),
-        ]
-    )
-    parsed = adapter._parse_stream(stream)
-    assert parsed.raw_response == b"the answer"
-
-
-def test_parse_tool_events_from_tool_finish(tmp_path: Path) -> None:
-    adapter = _make_adapter(tmp_path)
-    stream = _stream(
-        [
-            _tool_finish("gitnexus_query", id="t1"),
-            _tool_finish("read", id="t2"),
-            _tool_finish("grep", id="t3"),
-            _tool_finish("bash", id="t4"),
-            _message_finish("assistant", texts=["done"]),
+            _tool_use_event("gitnexus_query", call_id="c1"),
+            _tool_use_event("read", call_id="c2"),
+            _tool_use_event("grep", call_id="c3"),
+            _tool_use_event("bash", call_id="c4"),
+            _text_event("done"),
         ]
     )
     parsed = adapter._parse_stream(stream)
@@ -678,38 +690,14 @@ def test_parse_tool_events_from_tool_finish(tmp_path: Path) -> None:
     assert labels == ["gitnexus_query", "read", "grep", "bash"]
 
 
-def test_parse_tool_events_from_message_finish_parts(tmp_path: Path) -> None:
+def test_parse_tool_use_dedup_by_callID(tmp_path: Path) -> None:
+    """Two tool_use events with the same callID are counted once."""
     adapter = _make_adapter(tmp_path)
     stream = _stream(
         [
-            _message_finish(
-                "assistant",
-                texts=["done"],
-                tool_parts=[
-                    {"tool": "gitnexus_context", "id": "t1"},
-                    {"tool": "glob", "id": "t2"},
-                ],
-            ),
-        ]
-    )
-    parsed = adapter._parse_stream(stream)
-    kinds = [e.kind for e in parsed.tool_events]
-    assert kinds == [ToolKind.GRAPH, ToolKind.SEARCH]
-
-
-def test_parse_tool_events_dedup_across_events(tmp_path: Path) -> None:
-    """A tool seen in both tool.finish and message.finish is counted once."""
-    adapter = _make_adapter(tmp_path)
-    stream = _stream(
-        [
-            _tool_finish("gitnexus_query", id="t1"),
-            _message_finish(
-                "assistant",
-                texts=["done"],
-                tool_parts=[
-                    {"tool": "gitnexus_query", "id": "t1"},
-                ],
-            ),
+            _tool_use_event("gitnexus_query", call_id="same-id"),
+            _tool_use_event("gitnexus_query", call_id="same-id"),
+            _text_event("done"),
         ]
     )
     parsed = adapter._parse_stream(stream)
@@ -721,8 +709,8 @@ def test_parse_errored_tool_not_counted(tmp_path: Path) -> None:
     adapter = _make_adapter(tmp_path)
     stream = _stream(
         [
-            _tool_finish("bash", id="t1", state="error", error="boom"),
-            _message_finish("assistant", texts=["recovered"]),
+            _tool_use_event("bash", call_id="c1", status="error", error="boom"),
+            _text_event("recovered"),
         ]
     )
     parsed = adapter._parse_stream(stream)
@@ -734,9 +722,9 @@ def test_parse_token_summation_across_steps(tmp_path: Path) -> None:
     adapter = _make_adapter(tmp_path)
     stream = _stream(
         [
-            _step_finish(100, 20, sid="s1"),
-            _step_finish(250, 30, sid="s2"),
-            _message_finish("assistant", texts=["done"]),
+            _step_finish_event(100, 20),
+            _step_finish_event(250, 30),
+            _text_event("done"),
         ]
     )
     parsed = adapter._parse_stream(stream)
@@ -748,8 +736,8 @@ def test_parse_missing_usage_defaults_to_zero(tmp_path: Path) -> None:
     adapter = _make_adapter(tmp_path)
     stream = _stream(
         [
-            _step_finish(None, None),
-            _message_finish("assistant", texts=["done"]),
+            _step_finish_event(None, None),
+            _text_event("done"),
         ]
     )
     parsed = adapter._parse_stream(stream)
@@ -759,7 +747,7 @@ def test_parse_missing_usage_defaults_to_zero(tmp_path: Path) -> None:
 
 def test_parse_no_step_finish_zero_tokens(tmp_path: Path) -> None:
     adapter = _make_adapter(tmp_path)
-    stream = _stream([_message_finish("assistant", texts=["done"])])
+    stream = _stream([_text_event("done")])
     parsed = adapter._parse_stream(stream)
     assert parsed.input_tokens == 0
     assert parsed.output_tokens == 0
@@ -769,9 +757,7 @@ def test_parse_malformed_lines_skipped(tmp_path: Path) -> None:
     adapter = _make_adapter(tmp_path)
     stream = (
         "not json at all\n"
-        + _text_finish("answer")
-        + "\n"
-        + _message_finish("assistant", texts=["answer"])
+        + _text_event("answer")
         + "\n"
         + "{bad"
     )
@@ -806,20 +792,20 @@ def test_parse_missing_final_text_raises(tmp_path: Path) -> None:
     adapter = _make_adapter(tmp_path)
     stream = _stream(
         [
-            _tool_finish("gitnexus_query", id="t1"),
-            _step_finish(10, 5),
+            _tool_use_event("gitnexus_query", call_id="c1"),
+            _step_finish_event(10, 5),
         ]
     )
     with pytest.raises(AgentOutputError, match="no final assistant text"):
         adapter._parse_stream(stream)
 
 
-def test_parse_final_assistant_tool_only_message_raises(tmp_path: Path) -> None:
-    """A final assistant message with only tool parts (no text) is missing text."""
+def test_parse_tool_only_no_text_raises(tmp_path: Path) -> None:
+    """A stream with only tool_use events (no text) is missing final text."""
     adapter = _make_adapter(tmp_path)
     stream = _stream(
         [
-            _message_finish("assistant", tool_parts=[{"tool": "gitnexus_query", "id": "t1"}]),
+            _tool_use_event("gitnexus_query", call_id="c1"),
         ]
     )
     with pytest.raises(AgentOutputError, match="no final assistant text"):
@@ -835,16 +821,11 @@ def test_parse_custom_classification_patterns(tmp_path: Path) -> None:
     adapter = _make_adapter(tmp_path, tool_name_patterns=patterns)
     stream = _stream(
         [
-            _message_finish(
-                "assistant",
-                texts=["done"],
-                tool_parts=[
-                    {"tool": "custom_graph_q", "id": "1"},
-                    {"tool": "mysearch", "id": "2"},
-                    {"tool": "cat", "id": "3"},
-                    {"tool": "gitnexus_query", "id": "4"},
-                ],
-            ),
+            _tool_use_event("custom_graph_q", call_id="c1"),
+            _tool_use_event("mysearch", call_id="c2"),
+            _tool_use_event("cat", call_id="c3"),
+            _tool_use_event("gitnexus_query", call_id="c4"),
+            _text_event("done"),
         ]
     )
     parsed = adapter._parse_stream(stream)
@@ -868,8 +849,8 @@ def test_tool_events_stamped_with_runner_source(tmp_path: Path) -> None:
     adapter = _make_adapter(tmp_path)
     stream = _stream(
         [
-            _tool_finish("gitnexus_query", id="t1"),
-            _message_finish("assistant", texts=["done"]),
+            _tool_use_event("gitnexus_query", call_id="c1"),
+            _text_event("done"),
         ]
     )
     parsed = adapter._parse_stream(stream)
@@ -882,9 +863,9 @@ def test_execute_returns_agent_run_outcome(tmp_path: Path) -> None:
     adapter = _graph_adapter(tmp_path)
     stream = _stream(
         [
-            _tool_finish("gitnexus_query", id="t1"),
-            _message_finish("assistant", texts=["The bug is in _load_events."]),
-            _step_finish(300, 50),
+            _tool_use_event("gitnexus_query", call_id="c1"),
+            _text_event("The bug is in _load_events."),
+            _step_finish_event(300, 50),
         ]
     )
     with patch(_RUN, return_value=_completed(stream)):
@@ -917,7 +898,7 @@ def test_prompt_loader_called_with_identity(tmp_path: Path) -> None:
     )
     # graph policy still needs the graph config; patterns cleared just to keep
     # the adapter grep-capable in other tests (not exercised here).
-    stream = _stream([_message_finish("assistant", texts=["answer"])])
+    stream = _stream([_text_event("answer")])
     with patch(_RUN, return_value=_completed(stream)):
         adapter.execute(case_id=CASE_ID, task_type=TASK_TYPE, tool_policy="graph")
     assert calls == [(CASE_ID, TASK_TYPE)]
@@ -967,7 +948,7 @@ def test_plain_oserror_converted_to_launch_error(tmp_path: Path) -> None:
 
 def test_identity_mismatch_raises(tmp_path: Path) -> None:
     adapter = _graph_adapter(tmp_path, case_id="case-A")
-    stream = _stream([_message_finish("assistant", texts=["answer"])])
+    stream = _stream([_text_event("answer")])
     with patch(_RUN, return_value=_completed(stream)):
         with pytest.raises(AgentAdapterError, match="case_id mismatch"):
             adapter.execute(case_id="case-B", task_type=TASK_TYPE, tool_policy="graph")
@@ -988,7 +969,7 @@ def test_empty_resolved_prompt_raises(tmp_path: Path) -> None:
 
 def test_last_command_redacts_prompt(tmp_path: Path) -> None:
     adapter = _graph_adapter(tmp_path)
-    stream = _stream([_message_finish("assistant", texts=["answer"])])
+    stream = _stream([_text_event("answer")])
     with patch(_RUN, return_value=_completed(stream)):
         adapter.execute(case_id=CASE_ID, task_type=TASK_TYPE, tool_policy="graph")
     cmd_str = " ".join(adapter.last_command)
@@ -998,7 +979,7 @@ def test_last_command_redacts_prompt(tmp_path: Path) -> None:
 
 def test_last_command_preserves_non_secret_flags(tmp_path: Path) -> None:
     adapter = _graph_adapter(tmp_path)
-    stream = _stream([_message_finish("assistant", texts=["answer"])])
+    stream = _stream([_text_event("answer")])
     with patch(_RUN, return_value=_completed(stream)):
         adapter.execute(case_id=CASE_ID, task_type=TASK_TYPE, tool_policy="graph")
     cmd = adapter.last_command
@@ -1019,8 +1000,8 @@ def test_chinese_text_decoded_as_utf8(tmp_path: Path) -> None:
     adapter = _graph_adapter(tmp_path)
     stream = _stream(
         [
-            _message_finish("assistant", texts=[chinese]),
-            _step_finish(10, 20),
+            _text_event(chinese),
+            _step_finish_event(10, 20),
         ]
     )
     with patch(_RUN, return_value=_completed(stream)):
@@ -1128,9 +1109,9 @@ def test_execute_run_integration_graph_compliant(tmp_path: Path) -> None:
     answer_json = fx.completed_answer_bytes().decode("utf-8")
     stream = _stream(
         [
-            _tool_finish("gitnexus_query", id="t1"),
-            _message_finish("assistant", texts=[answer_json]),
-            _step_finish(500, 100),
+            _tool_use_event("gitnexus_query", call_id="c1"),
+            _text_event(answer_json),
+            _step_finish_event(500, 100),
         ]
     )
 
@@ -1165,10 +1146,10 @@ def test_execute_run_integration_grep_compliant(tmp_path: Path) -> None:
     answer_json = fx.completed_answer_bytes().decode("utf-8")
     stream = _stream(
         [
-            _tool_finish("grep", id="t1"),
-            _tool_finish("read", id="t2"),
-            _message_finish("assistant", texts=[answer_json]),
-            _step_finish(200, 50),
+            _tool_use_event("grep", call_id="c1"),
+            _tool_use_event("read", call_id="c2"),
+            _text_event(answer_json),
+            _step_finish_event(200, 50),
         ]
     )
 
@@ -1251,7 +1232,7 @@ def test_r1_remote_mcp_headers_delivered_via_env_not_argv(tmp_path: Path) -> Non
         _opencode_mcp("gitnexus", url="https://x/sse", headers={"Authorization": secret}),
     )
     adapter = _make_adapter(tmp_path, graph_mcp_configs=(gcfg,))
-    stream = _stream([_message_finish("assistant", texts=["answer"])])
+    stream = _stream([_text_event("answer")])
     with patch(_RUN, return_value=_completed(stream)) as mock_run:
         adapter.execute(case_id=CASE_ID, task_type=TASK_TYPE, tool_policy="graph")
     env = mock_run.call_args.kwargs["env"]
@@ -1291,10 +1272,10 @@ def test_r2_idless_same_name_tools_counted_separately(tmp_path: Path) -> None:
     adapter = _make_adapter(tmp_path)
     stream = _stream(
         [
-            _tool_finish("read", id=""),
-            _tool_finish("read", id=""),
-            _tool_finish("read", id=""),
-            _message_finish("assistant", texts=["done"]),
+            _tool_use_event("read", call_id=""),
+            _tool_use_event("read", call_id=""),
+            _tool_use_event("read", call_id=""),
+            _text_event("done"),
         ]
     )
     parsed = adapter._parse_stream(stream)
@@ -1303,17 +1284,14 @@ def test_r2_idless_same_name_tools_counted_separately(tmp_path: Path) -> None:
     assert all(e.label == "read" for e in parsed.tool_events)
 
 
-def test_r2_idless_tools_from_tool_and_message_finish(tmp_path: Path) -> None:
-    """ID-less tools from tool.finish and message.finish are counted separately."""
+def test_r2_idless_tools_counted_separately(tmp_path: Path) -> None:
+    """ID-less tool_use events (empty callID) are each counted separately."""
     adapter = _make_adapter(tmp_path)
     stream = _stream(
         [
-            _tool_finish("read", id=""),
-            _message_finish(
-                "assistant",
-                texts=["done"],
-                tool_parts=[{"tool": "read", "id": ""}],
-            ),
+            _tool_use_event("read", call_id=""),
+            _tool_use_event("read", call_id=""),
+            _text_event("done"),
         ]
     )
     parsed = adapter._parse_stream(stream)
@@ -1322,53 +1300,29 @@ def test_r2_idless_tools_from_tool_and_message_finish(tmp_path: Path) -> None:
 
 
 def test_r2_real_id_dedup_preserved(tmp_path: Path) -> None:
-    """Tools with a real ID are still deduplicated across events."""
+    """Tools with a real callID are deduplicated across tool_use events."""
     adapter = _make_adapter(tmp_path)
     stream = _stream(
         [
-            _tool_finish("read", id="real-1"),
-            _message_finish(
-                "assistant",
-                texts=["done"],
-                tool_parts=[{"tool": "read", "id": "real-1"}],
-            ),
+            _tool_use_event("read", call_id="real-1"),
+            _tool_use_event("read", call_id="real-1"),
+            _text_event("done"),
         ]
     )
     parsed = adapter._parse_stream(stream)
     assert len(parsed.tool_events) == 1
 
 
-# -- R3: ignore non-assistant message tool parts ---------------------------- #
+# -- R3: all tool_use events are agent-initiated (no role filtering needed) -- #
 
 
-def test_r3_non_assistant_message_tool_parts_ignored(tmp_path: Path) -> None:
-    """Tool parts from a user message are not counted as tool events."""
+def test_r3_tool_use_events_always_counted(tmp_path: Path) -> None:
+    """In the real event format, all tool_use events are agent-initiated."""
     adapter = _make_adapter(tmp_path)
     stream = _stream(
         [
-            _message_finish(
-                "user",
-                texts=["what tools did you use?"],
-                tool_parts=[{"tool": "read", "id": "t1"}, {"tool": "grep", "id": "t2"}],
-            ),
-            _message_finish("assistant", texts=["I used read and grep."]),
-        ]
-    )
-    parsed = adapter._parse_stream(stream)
-    assert parsed.tool_events == ()
-    assert parsed.raw_response == b"I used read and grep."
-
-
-def test_r3_assistant_message_tool_parts_still_counted(tmp_path: Path) -> None:
-    """Tool parts from an assistant message are still counted (regression guard)."""
-    adapter = _make_adapter(tmp_path)
-    stream = _stream(
-        [
-            _message_finish(
-                "assistant",
-                texts=["done"],
-                tool_parts=[{"tool": "read", "id": "t1"}],
-            ),
+            _tool_use_event("read", call_id="c1"),
+            _text_event("done"),
         ]
     )
     parsed = adapter._parse_stream(stream)
@@ -1394,7 +1348,7 @@ def test_r4_redact_uses_last_separator_with_extra_args_dash(tmp_path: Path) -> N
 def test_r4_redact_prompt_hidden_in_execute_with_extra_args_dash(tmp_path: Path) -> None:
     """End-to-end: the prompt stays hidden in last_command when extra_args has '--'."""
     adapter = _graph_adapter(tmp_path, extra_args=("--", "passthrough"))
-    stream = _stream([_message_finish("assistant", texts=["answer"])])
+    stream = _stream([_text_event("answer")])
     with patch(_RUN, return_value=_completed(stream)):
         adapter.execute(case_id=CASE_ID, task_type=TASK_TYPE, tool_policy="graph")
     cmd_str = " ".join(adapter.last_command)
@@ -1409,7 +1363,7 @@ def test_r4_redact_prompt_hidden_in_execute_with_extra_args_dash(tmp_path: Path)
 def test_r5_disable_project_config_set_in_child_env(tmp_path: Path) -> None:
     """OPENCODE_DISABLE_PROJECT_CONFIG=true is set in the child env."""
     adapter = _graph_adapter(tmp_path)
-    stream = _stream([_message_finish("assistant", texts=["answer"])])
+    stream = _stream([_text_event("answer")])
     with patch(_RUN, return_value=_completed(stream)) as mock_run:
         adapter.execute(case_id=CASE_ID, task_type=TASK_TYPE, tool_policy="graph")
     env = mock_run.call_args.kwargs["env"]
@@ -1419,7 +1373,7 @@ def test_r5_disable_project_config_set_in_child_env(tmp_path: Path) -> None:
 def test_r5_child_env_inherits_parent_and_does_not_modify_it(tmp_path: Path) -> None:
     """Child env inherits parent env (Provider auth) and parent is not written back."""
     adapter = _graph_adapter(tmp_path)
-    stream = _stream([_message_finish("assistant", texts=["answer"])])
+    stream = _stream([_text_event("answer")])
     marker = "AIS013_R5_MARKER"
     with patch.dict(os.environ, {marker: "inherited"}, clear=False):
         assert OPENCODE_DISABLE_PROJECT_CONFIG_ENV not in os.environ
@@ -1436,7 +1390,7 @@ def test_r5_child_env_inherits_parent_and_does_not_modify_it(tmp_path: Path) -> 
 def test_r5_deny_by_default_permissions_retained(tmp_path: Path) -> None:
     """The inline deny-by-default permission policy is still in the config."""
     adapter = _graph_adapter(tmp_path)
-    stream = _stream([_message_finish("assistant", texts=["answer"])])
+    stream = _stream([_text_event("answer")])
     with patch(_RUN, return_value=_completed(stream)) as mock_run:
         adapter.execute(case_id=CASE_ID, task_type=TASK_TYPE, tool_policy="graph")
     env = mock_run.call_args.kwargs["env"]

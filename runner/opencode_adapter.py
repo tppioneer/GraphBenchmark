@@ -31,32 +31,31 @@ plugins. This adapter does not inspect, print, copy or write credential values.
 discoverable from ``opencode run --help`` alone); it is a module constant so it
 can be retargeted if the CLI renames it.
 
-NDJSON event parsing (invariants): the final assistant text becomes
-``raw_response``; completed tool parts become Runner-observed
-:class:`ToolEvent`s; ``step.finish`` token data supplies input/output usage
-(summed across steps). Missing usage is explicitly ``0``, never invented.
-Missing final text, malformed/empty streams, ``error`` events, non-zero exit,
-timeout, launch failure, invalid paths/config and duplicate MCP server names are
+NDJSON event parsing (invariants): the last assistant ``text`` event's
+``part.text`` becomes ``raw_response``; completed ``tool_use`` events become
+Runner-observed :class:`ToolEvent`s; ``step_finish`` token data
+(``part.tokens.input``/``output``) supplies input/output usage (summed across
+steps). Missing usage is explicitly ``0``, never invented. Missing final
+text, malformed/empty streams, ``error`` events, non-zero exit, timeout,
+launch failure, invalid paths/config and duplicate MCP server names are
 deterministic, auditable adapter errors.
 
-CLI flags used (verified against ``opencode run --help`` v1.18.13): ``run``,
+CLI flags used (verified against ``opencode run --help`` v1.18.15): ``run``,
 ``--format json``, ``--model <provider/model>``, ``--dir <repo>``, ``--auto``,
 ``--pure``. The prompt is passed as the ``[message..]`` positional after ``--``
 so it is never consumed by an option. There is no ``--mcp-config`` flag on
 ``opencode run``, so MCP configuration is delivered via the env override rather
 than argv.
 
-Assumed ``--format json`` event shapes (a live model session was NOT run, per
-task protocol; tests construct the same shapes via a fake subprocess):
+``--format json`` event shapes (verified against opencode v1.18.15 live
+output):
 
-* ``{"type": "text.finish", "id": "...", "text": "..."}``
-* ``{"type": "tool.finish", "id": "...", "tool": "<name>",
-   "state": "completed|error|pending", "error": ...}``
-* ``{"type": "step.finish",
-   "info": {"usage": {"input_tokens": N, "output_tokens": N}}}``
-* ``{"type": "message.finish",
-   "message": {"role": "assistant",
-   "parts": [{"type": "text"|"tool", ...}]}}``
+* ``{"type": "step_start", "part": {"type": "step-start", ...}}``
+* ``{"type": "text", "part": {"type": "text", "text": "..."}}``
+* ``{"type": "tool_use", "part": {"type": "tool", "tool": "<name>",
+   "callID": "...", "state": {"status": "completed"|"error"}}}``
+* ``{"type": "step_finish", "part": {"type": "step-finish",
+   "tokens": {"input": N, "output": N, ...}}}``
 * ``{"type": "error", "error": {"message": "..."}}``
 """
 
@@ -92,7 +91,8 @@ __all__ = [
 ]
 
 #: Default model (invariant). ``provider/model`` form per ``--model`` help.
-DEFAULT_AGENT_MODEL = "ark-plan-qlw/deepseek-v4-flash"
+#: Provider name matches the global OpenCode config's ``ark-plan-lmm`` provider.
+DEFAULT_AGENT_MODEL = "ark-plan-lmm/deepseek-v4-flash"
 
 DEFAULT_TIMEOUT_SECONDS = 600.0
 
@@ -528,7 +528,15 @@ class OpenCodeAgentAdapter:
         return servers
 
     def _normalize_server(self, name: str, spec: Any, path: Path) -> dict[str, Any]:
-        """Normalize one MCP server spec to the OpenCode-native shape."""
+        """Normalize one MCP server spec to the OpenCode-native shape.
+
+        Both Claude-style ``{"type": "stdio", "command": "...", "args": [...],
+        "env": {...}}`` and OpenCode-native ``{"type": "local", "command":
+        [...], "environment": {...}}`` are normalized to the OpenCode-native
+        shape. Claude's ``"stdio"`` type is mapped to ``"local"`` (the
+        OpenCode schema value); ``env`` (Claude) and ``environment`` (OpenCode)
+        are both accepted and emitted as ``environment``.
+        """
         if not isinstance(spec, dict):
             raise AgentAdapterError(f"MCP server {name!r} in {path!r} must be a JSON object")
         normalized: dict[str, Any] = {"enabled": True}
@@ -546,7 +554,9 @@ class OpenCodeAgentAdapter:
             cmd_list.extend(str(a) for a in args)
             if not cmd_list or not cmd_list[0]:
                 raise AgentAdapterError(f"MCP server {name!r} has no command")
-            normalized["type"] = spec.get("type", "local")
+            # Claude-style configs use "stdio"; OpenCode schema requires "local".
+            raw_type = spec.get("type", "local")
+            normalized["type"] = "local" if raw_type == "stdio" else raw_type
             normalized["command"] = cmd_list
         elif "url" in spec:
             normalized["type"] = "remote"
@@ -565,11 +575,15 @@ class OpenCodeAgentAdapter:
                 normalized["headers"] = {str(k): str(v) for k, v in headers.items()}
         else:
             raise AgentAdapterError(f"MCP server {name!r} in {path!r} has no 'command' or 'url'")
-        env = spec.get("env", {})
+        # Accept both Claude-style "env" and OpenCode-native "environment";
+        # always emit as "environment" per OpenCode schema.
+        env = spec.get("env")
+        if env is None:
+            env = spec.get("environment")
         if env:
             if not isinstance(env, dict):
                 raise AgentAdapterError(f"MCP server {name!r} env must be a JSON object")
-            normalized["env"] = {str(k): str(v) for k, v in env.items()}
+            normalized["environment"] = {str(k): str(v) for k, v in env.items()}
         return normalized
 
     def _allowed_builtins_for(self, tool_policy: str) -> tuple[str, ...]:
@@ -603,32 +617,44 @@ class OpenCodeAgentAdapter:
     def _parse_stream(self, stdout: str) -> _StreamParseResult:
         """Parse OpenCode ``--format json`` NDJSON output defensively.
 
-        - The final assistant message's text (from ``message.finish``) is the
-          authoritative ``raw_response``; ``text.finish`` texts are a fallback
-          when no ``message.finish`` is emitted.
-        - Completed tool parts (``tool.finish`` / assistant ``message.finish``
-          tool parts with state ``completed``) become :class:`ToolEvent`s,
-          classified via :meth:`_classify_tool_name` and stamped with
-          RUNNER_OBSERVED_SOURCE. Tool parts from non-assistant messages are
-          ignored (R3). Tools with a real ID are deduplicated by that ID; ID-less
-          calls get unique per-occurrence fallback identities so distinct
-          same-name calls are not collapsed (R2).
-        - ``step.finish`` usage is summed into input/output tokens. Missing
-          usage contributes 0 (never invented).
+        Actual event format (verified against opencode v1.18.15 ``--format
+        json``):
+
+        * ``{"type": "step_start", "part": {"type": "step-start", ...}}``
+          — step begin, no payload of interest.
+        * ``{"type": "text", "part": {"type": "text", "text": "..."}}``
+          — assistant text; the last ``text`` event's ``part.text`` is the
+          final response.
+        * ``{"type": "tool_use", "part": {"type": "tool", "tool": "<name>",
+           "callID": "...", "state": {"status": "completed"|"error"}}}``
+           — completed tool calls become :class:`ToolEvent`s.
+        * ``{"type": "step_finish", "part": {"type": "step-finish",
+           "tokens": {"input": N, "output": N}}}``
+           — token usage summed across steps.
+        * ``{"type": "error", "error": {"message": "..."}}``
+           — raises :class:`AgentOutputError`.
+
+        - Completed ``tool_use`` parts become Runner-observed
+          :class:`ToolEvent`s, classified via :meth:`_classify_tool_name` and
+          stamped with RUNNER_OBSERVED_SOURCE. Tools with a real ``callID``
+          are deduplicated by that ID; ID-less calls get unique per-occurrence
+          fallback identities so distinct same-name calls are not collapsed
+          (R2).
+        - ``step_finish`` token data (``part.tokens.input``/``output``) is
+          summed across steps. Missing usage is explicitly ``0``, never
+          invented.
         - A top-level ``error`` event raises :class:`AgentOutputError`.
 
         Malformed individual lines are skipped. An entirely empty stream (no
-        valid records) or a stream with no final assistant text raises
+        valid records) or a stream with no ``text`` event raises
         :class:`AgentOutputError`.
         """
-        # id -> (tool_name, completed); insertion-ordered. Both tool.finish and
-        # assistant message.finish tool parts write here (message.finish is
-        # authoritative, last write wins), so a tool with a real ID seen in both
-        # events is counted once. ID-less calls get unique per-occurrence
-        # fallback keys so distinct same-name calls are not collapsed (R2).
+        # callID -> (tool_name, completed); insertion-ordered. A tool with a
+        # real callID is deduplicated (last write wins). ID-less calls get
+        # unique per-occurrence fallback keys so distinct same-name calls are
+        # not collapsed (R2).
         tools: dict[str, tuple[str, bool]] = {}
         noid_seq: list[int] = [0]  # mutable counter for per-occurrence fallback IDs
-        message_final_text: str | None = None
         text_parts: list[str] = []
         input_tokens = USAGE_UNAVAILABLE
         output_tokens = USAGE_UNAVAILABLE
@@ -654,20 +680,18 @@ class OpenCodeAgentAdapter:
                     "opencode stream reported an error event: "
                     + self._redact_text(_extract_error_message(record))
                 )
-            elif rtype == "text.finish":
-                text = record.get("text")
-                if isinstance(text, str):
-                    text_parts.append(text)
-            elif rtype == "tool.finish":
+            elif rtype == "text":
+                part = record.get("part")
+                if isinstance(part, dict):
+                    text = part.get("text")
+                    if isinstance(text, str):
+                        text_parts.append(text)
+            elif rtype == "tool_use":
                 self._record_tool(record, tools, noid_seq)
-            elif rtype == "step.finish":
+            elif rtype == "step_finish":
                 it, ot = _extract_usage(record)
                 input_tokens += it
                 output_tokens += ot
-            elif rtype == "message.finish":
-                msg_text = self._process_message_finish(record, tools, noid_seq)
-                if msg_text is not None:
-                    message_final_text = msg_text
 
         if valid_records == 0:
             raise AgentOutputError(
@@ -675,11 +699,7 @@ class OpenCodeAgentAdapter:
                 f"(encountered {total_lines} non-blank line(s))"
             )
 
-        if message_final_text is not None:
-            final_text = message_final_text
-        elif text_parts:
-            # No message boundary seen: use the last text part (most likely the
-            # final answer when only text.finish events are emitted).
+        if text_parts:
             final_text = text_parts[-1]
         else:
             final_text = ""
@@ -707,62 +727,23 @@ class OpenCodeAgentAdapter:
         tools: dict[str, tuple[str, bool]],
         noid_seq: list[int],
     ) -> None:
-        """Record a ``tool.finish`` event's tool name + completed state.
+        """Record a ``tool_use`` event's tool name + completed state.
 
-        Tools with a real ID are deduplicated by that ID (last write wins). An
-        ID-less call gets a unique per-occurrence fallback key so distinct
-        same-name calls are not collapsed into one (R2).
+        Extracts tool info from ``record["part"]``. Tools with a real
+        ``callID`` are deduplicated by that ID (last write wins). An ID-less
+        call gets a unique per-occurrence fallback key so distinct same-name
+        calls are not collapsed into one (R2).
         """
-        name = record.get("tool")
+        part = record.get("part")
+        if not isinstance(part, dict):
+            return
+        name = part.get("tool")
         if not isinstance(name, str) or not name:
             return
-        tid = record.get("id")
+        tid = part.get("callID")
         if not isinstance(tid, str) or not tid:
             tid = _noid_key(noid_seq)
-        tools[tid] = (name, _tool_completed(record))
-
-    def _process_message_finish(
-        self,
-        record: dict[str, Any],
-        tools: dict[str, tuple[str, bool]],
-        noid_seq: list[int],
-    ) -> str | None:
-        """Extract assistant text and tool parts from a ``message.finish`` event.
-
-        Returns the concatenated assistant text (``""`` if an assistant message
-        has no text parts, so a final tool-only message triggers missing-text),
-        or ``None`` for a non-assistant message (leaving the prior value). Tool
-        parts are counted only from assistant messages (R3): a user/tool/system
-        message may echo tool calls but those are not agent-initiated.
-        """
-        message = record.get("message")
-        if not isinstance(message, dict):
-            return None
-        role = message.get("role")
-        parts = message.get("parts")
-        if not isinstance(parts, list):
-            return None
-        is_assistant = role == "assistant"
-        texts: list[str] = []
-        for part in parts:
-            if not isinstance(part, dict):
-                continue
-            ptype = part.get("type")
-            if ptype == "text":
-                text = part.get("text")
-                if isinstance(text, str):
-                    texts.append(text)
-            elif ptype == "tool" and is_assistant:
-                name = part.get("tool")
-                if isinstance(name, str) and name:
-                    tid = part.get("id")
-                    if not isinstance(tid, str) or not tid:
-                        tid = _noid_key(noid_seq)
-                    # message.finish tool parts are authoritative (last write).
-                    tools[tid] = (name, _tool_completed(part))
-        if is_assistant:
-            return "".join(texts)
-        return None
+        tools[tid] = (name, _tool_completed(part))
 
     # -- Subprocess execution ------------------------------------------------ #
 
@@ -897,35 +878,36 @@ def _noid_key(noid_seq: list[int]) -> str:
     return key
 
 
-def _tool_completed(record: dict[str, Any]) -> bool:
-    """Whether a tool part/finish record represents a completed tool call."""
-    state = record.get("state")
-    if isinstance(state, str):
-        return state == "completed"
+def _tool_completed(part: dict[str, Any]) -> bool:
+    """Whether a ``tool_use`` part represents a completed tool call.
+
+    In the real event format, completion status is in
+    ``part["state"]["status"]`` (``"completed"`` or ``"error"``).
+    """
+    state = part.get("state")
+    if isinstance(state, dict):
+        status = state.get("status")
+        if isinstance(status, str):
+            return status == "completed"
     # No explicit state: treat as completed unless an error is present.
-    error = record.get("error")
-    return not error
+    return not part.get("error")
 
 
 def _extract_usage(record: dict[str, Any]) -> tuple[int, int]:
-    """Extract (input_tokens, output_tokens) from a ``step.finish`` record.
+    """Extract (input_tokens, output_tokens) from a ``step_finish`` record.
 
-    Missing usage contributes 0 (never invented). Accepts usage nested under
-    ``info.usage`` (documented) or top-level ``usage`` (defensive), and both
-    snake_case and camelCase token keys.
+    Token usage is in ``record["part"]["tokens"]`` with keys ``input`` and
+    ``output`` (verified against opencode v1.18.15). Missing usage
+    contributes 0 (never invented).
     """
-    info = record.get("info")
-    usage = info.get("usage") if isinstance(info, dict) else None
-    if not isinstance(usage, dict):
-        usage = record.get("usage")
-    if not isinstance(usage, dict):
+    part = record.get("part")
+    if not isinstance(part, dict):
         return 0, 0
-    it = usage.get("input_tokens")
-    if it is None:
-        it = usage.get("inputTokens")
-    ot = usage.get("output_tokens")
-    if ot is None:
-        ot = usage.get("outputTokens")
+    tokens = part.get("tokens")
+    if not isinstance(tokens, dict):
+        return 0, 0
+    it = tokens.get("input")
+    ot = tokens.get("output")
     input_tokens = int(it) if isinstance(it, (int, float)) else 0
     output_tokens = int(ot) if isinstance(ot, (int, float)) else 0
     return input_tokens, output_tokens

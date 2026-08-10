@@ -113,6 +113,11 @@ OPENCODE_DISABLE_PROJECT_CONFIG_ENV = "OPENCODE_DISABLE_PROJECT_CONFIG"
 
 USAGE_UNAVAILABLE = 0
 
+#: Regex to extract the real ``.exe`` path from a npm ``.CMD``/``.BAT`` wrapper.
+#: Used to bypass ``cmd.exe`` (which imposes an 8191-char command line limit
+#: that long skill-prepended prompts exceed).
+_CMD_EXE_RE = re.compile(r'"([^"]*\.exe)"', re.IGNORECASE)
+
 #: OpenCode built-in tools the permission map is aware of (deny-by-default).
 #: ``read``/``grep``/``glob``/``list``/``bash`` are the agent built-ins named in
 #: the invariants; ``edit``/``webfetch`` are dangerous transports that are
@@ -803,15 +808,22 @@ class OpenCodeAgentAdapter:
 
         Prefers a PATHEXT-matching shim (``opencode.cmd`` / ``opencode.exe``) via
         :func:`shutil.which`, which on Windows skips the extensionless npm shim
-        that raises WinError 193. If no PATHEXT match is found, discovers
-        ``opencode.ps1`` in PATH (``.ps1`` is not in the default PATHEXT) and
-        invokes it via ``powershell -NoProfile -ExecutionPolicy Bypass -File``
-        using subprocess argv (never a shell string). Returns ``["opencode"]``
-        as a fallback so a missing executable surfaces as
-        :class:`AgentLaunchError` at run time.
+        that raises WinError 193. When a ``.CMD``/``.BAT`` wrapper is found, it
+        is resolved to the real ``.exe`` it wraps so ``CreateProcess`` is used
+        directly instead of ``cmd.exe`` — this bypasses the 8191-character
+        command line limit that would otherwise truncate long skill-prepended
+        prompts. If no PATHEXT match is found, discovers ``opencode.ps1`` in
+        PATH (``.ps1`` is not in the default PATHEXT) and invokes it via
+        ``powershell -NoProfile -ExecutionPolicy Bypass -File`` using subprocess
+        argv (never a shell string). Returns ``["opencode"]`` as a fallback so
+        a missing executable surfaces as :class:`AgentLaunchError` at run time.
         """
         found = shutil.which("opencode")
         if found:
+            if found.lower().endswith((".cmd", ".bat")):
+                resolved = OpenCodeAgentAdapter._resolve_cmd_wrapper(found)
+                if resolved:
+                    return [resolved]
             return [found]
         ps1 = _find_executable_in_path("opencode.ps1")
         if ps1:
@@ -825,6 +837,34 @@ class OpenCodeAgentAdapter:
                 ps1,
             ]
         return ["opencode"]
+
+    @staticmethod
+    def _resolve_cmd_wrapper(cmd_path: str) -> str | None:
+        """Parse a ``.CMD``/``.BAT`` wrapper to find the real ``.exe`` path.
+
+        npm installs a ``.CMD`` shim alongside the package; the shim resolves
+        ``%dp0%`` to its own directory and calls ``...\\bin\\opencode.exe %*``.
+        This method extracts that ``.exe`` path, resolves it relative to the
+        wrapper directory, and returns it if the file exists. Returns ``None``
+        if parsing fails so the caller falls back to the wrapper.
+        """
+        try:
+            text = Path(cmd_path).read_text(encoding="utf-8", errors="replace")
+        except OSError:
+            return None
+        wrapper_dir = Path(cmd_path).resolve().parent
+        for line in text.splitlines():
+            match = _CMD_EXE_RE.search(line)
+            if match:
+                spec = match.group(1)
+                spec = spec.replace("%dp0%", str(wrapper_dir))
+                spec = spec.replace("%~dp0", str(wrapper_dir))
+                exe_path = Path(spec)
+                if not exe_path.is_absolute():
+                    exe_path = wrapper_dir / exe_path
+                if exe_path.is_file():
+                    return str(exe_path)
+        return None
 
     # -- Redaction (S13.6: no prompt/secret content in audit logs) ---------- #
 

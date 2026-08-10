@@ -1,0 +1,65 @@
+# OpenCode agent experiment configuration (machine-specific).
+#
+# Same QwenPaw corrupt-inbox bug-localization case as the Claude Code formal
+# config, but selects the OpenCode AgentAdapter (AIS-013) via
+# ``runtime.agent_adapter: opencode``. The agent model uses the
+# ``provider/model`` format required by ``opencode run --model``.
+#
+# This file carries NO credential or secret values: the agent subprocess
+# inherits the parent's global OpenCode provider authentication; no key, token
+# or password is present. MCP configuration is injected via the
+# ``OPENCODE_CONFIG_CONTENT`` env override (never persisted, never in argv).
+experiment_id: qwenpaw-corrupt-inbox-opencode-v1
+purpose: formal
+status: executable
+case_id: qwenpaw-case-z-corrupt-inbox-recovery-bug
+task_type: bug_localization
+scoring_profile: bug_localization_v1
+case: cases/qwenpaw/qwenpaw-case-z-corrupt-inbox-recovery-bug.yaml
+ground_truth: ground-truth/qwenpaw/qwenpaw-case-z-corrupt-inbox-recovery-bug.yaml
+judge_model: glm-5.2
+# Paired Graph/Grep conditions: the same case is run once per condition per
+# repeat so the two tool policies are directly comparable.
+conditions:
+  - id: graph
+    tool_policy: graph
+  - id: grep
+    tool_policy: grep
+pairing: graph_vs_grep
+repeats: 3
+# Frozen runtime inputs (absolute local paths; non-secret). The QwenPaw target
+# repository revision is recorded for traceability.
+frozen_inputs:
+  repo_revision: 09fc515c88a5e817870e6b975e66b5be81893e03
+runtime:
+  agent_adapter: opencode
+  agent_model: 'ark-plan-lmm/glm-5.2'
+  repo_cwd: 'F:\develop\codes\QwenPaw\QwenPaw'
+  graph_mcp_configs:
+    - 'F:\develop\00-codes\benchmark-runtime\mcp\.mcp.json'
+  grep_mcp_configs: []
+  skill_file: 'F:\develop\00-codes\benchmark-runtime\skills\gitnexus-guide\SKILL.md'
+  runs_root: 'F:\develop\00-codes\benchmark-runtime\runs\GraphBenchmark-ai-score-v1'
+notes:
+  - >-
+    OpenCode agent: ``agent_adapter: opencode`` selects the
+    OpenCodeAgentAdapter (AIS-013). The adapter launches ``opencode run
+    --format json --model ark-plan-lmm/glm-5.2 --dir <repo> --auto --pure`` and
+    parses the NDJSON event stream (text/tool_use/step_finish events). MCP
+    config is injected via OPENCODE_CONFIG_CONTENT; project-local config is
+    disabled via OPENCODE_DISABLE_PROJECT_CONFIG=true.
+  - >-
+    Graph/Grep MCP isolation: the dispatcher isolates graph_mcp_configs to
+    Graph runs; a Grep run receives an empty Graph MCP set and has its Graph
+    tool-name patterns cleared. grep_mcp_configs is empty: Grep relies on
+    OpenCode built-ins (read/grep/glob/list) denied-by-default for everything
+    else.
+  - >-
+    Graph/Grep Skill isolation: skill_file is injected only into Graph runs
+    (prepended to the prompt); a Grep run receives no skill input so the Graph
+    Skill text cannot contaminate the Grep baseline.
+  - >-
+    The .mcp.json config uses Claude-style format (mcpServers, type: stdio);
+    the OpenCode adapter normalizes it to OpenCode-native shape (type: local,
+    command as merged list, environment key). Verified compatible with
+    opencode v1.18.16.

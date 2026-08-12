@@ -271,17 +271,21 @@ def _make_fake_factory(
 
 
 def _formal_runtime_resources_exist() -> bool:
-    """Whether the machine-specific formal runtime resources are on disk."""
-    return FORMAL_REPO_CWD.is_dir() and FORMAL_GRAPH_MCP.is_file() and FORMAL_GRAPH_SKILL.is_file()
+    """Whether the machine-specific formal runtime resources are on disk.
+
+    The Graph Skill file is no longer required: the formal config does not
+    configure a skill anymore (skill injection was removed).
+    """
+    return FORMAL_REPO_CWD.is_dir() and FORMAL_GRAPH_MCP.is_file()
 
 
 # Tests that construct adapters or assert clean validation require the
-# machine-specific runtime resources (QwenPaw repo, Graph MCP, Graph Skill) to
-# exist on disk. They run on the configured host and skip elsewhere; the
-# structural tests above do not need them.
+# machine-specific runtime resources (QwenPaw repo, Graph MCP) to exist on
+# disk. They run on the configured host and skip elsewhere; the structural
+# tests above do not need them.
 need_runtime_resources = pytest.mark.skipif(
     not _formal_runtime_resources_exist(),
-    reason="formal runtime resources (QwenPaw repo, Graph MCP, Graph Skill) "
+    reason="formal runtime resources (QwenPaw repo, Graph MCP) "
     "not present on this host",
 )
 
@@ -387,9 +391,10 @@ class TestFormalConfig:
         assert rt.repo_cwd == FORMAL_REPO_CWD
         assert rt.graph_mcp_configs == (FORMAL_GRAPH_MCP,)
         assert rt.grep_mcp_configs == ()  # Grep has no Graph MCP input
-        assert rt.skill_file == FORMAL_GRAPH_SKILL
+        # No skill configured (removed: Graph/Grep run without skill injection).
+        assert rt.skill_file is None
+        assert rt.skill_text is None  # no skill file, no inline text
         assert rt.runs_root == FORMAL_RUNS_ROOT
-        assert rt.skill_text is None  # skill via file, not inline text
         assert rt.plugin_dirs == ()
 
     def test_formal_config_case_paths_resolve(self) -> None:
@@ -501,16 +506,16 @@ class TestFormalConfig:
         # Grep set.
         assert grep_adapter._select_mcp_configs("grep") == ()
         assert graph_adapter._select_mcp_configs("graph") == (str(FORMAL_GRAPH_MCP),)
-        # Skill isolation (AIS-012, F2): the Graph run receives the configured
-        # Graph Skill; the Grep run receives no skill at all, so the Graph
-        # Skill text cannot contaminate the Grep baseline.
-        assert graph_adapter._skill_text == FORMAL_GRAPH_SKILL.read_text(encoding="utf-8")
+        # Skill isolation: the formal config no longer configures a skill, so
+        # neither Graph nor Grep runs receive skill text (the Graph Skill was
+        # removed from the config).
+        assert graph_adapter._skill_text is None
         assert grep_adapter._skill_text is None
-        # The constructed commands reflect the isolation: Graph injects the
-        # skill via --append-system-prompt; Grep does not.
+        # The constructed commands reflect the isolation: no skill is injected
+        # via --append-system-prompt for either policy.
         graph_argv = graph_adapter.build_command(tool_policy="graph", prompt="prompt")
         grep_argv = grep_adapter.build_command(tool_policy="grep", prompt="prompt")
-        assert "--append-system-prompt" in graph_argv
+        assert "--append-system-prompt" not in graph_argv
         assert "--append-system-prompt" not in grep_argv
         # No subprocess launched: execute() was never called.
         assert graph_adapter.last_command == []

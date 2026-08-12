@@ -26,19 +26,18 @@ conditions:
   - id: grep
     tool_policy: grep
 pairing: graph_vs_grep
-repeats: 3
+repeats: 5
 # Frozen runtime inputs (absolute local paths; non-secret). The QwenPaw target
 # repository revision is recorded for traceability.
 frozen_inputs:
   repo_revision: 09fc515c88a5e817870e6b975e66b5be81893e03
 runtime:
   agent_adapter: opencode
-  agent_model: 'ark-plan-lmm/glm-5.2'
+  agent_model: 'ark-plan-qlw/glm-5.2'
   repo_cwd: 'F:\develop\codes\QwenPaw\QwenPaw'
   graph_mcp_configs:
     - 'F:\develop\00-codes\benchmark-runtime\mcp\.mcp.json'
   grep_mcp_configs: []
-  skill_file: 'F:\develop\00-codes\benchmark-runtime\skills\gitnexus-guide\SKILL.md'
   runs_root: 'F:\develop\00-codes\benchmark-runtime\runs\GraphBenchmark-ai-score-v1'
 notes:
   - >-

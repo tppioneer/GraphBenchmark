@@ -43,7 +43,6 @@ runtime:
   graph_mcp_configs:
     - 'F:\develop\00-codes\benchmark-runtime\mcp\.mcp.json'
   grep_mcp_configs: []
-  skill_file: 'F:\develop\00-codes\benchmark-runtime\skills\gitnexus-guide\SKILL.md'
   runs_root: 'F:\develop\00-codes\benchmark-runtime\runs\GraphBenchmark-ai-score-v1'
 notes:
   - >-

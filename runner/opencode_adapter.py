@@ -94,7 +94,7 @@ __all__ = [
 #: Provider name matches the global OpenCode config's ``ark-plan-lmm`` provider.
 DEFAULT_AGENT_MODEL = "ark-plan-lmm/deepseek-v4-flash"
 
-DEFAULT_TIMEOUT_SECONDS = 600.0
+DEFAULT_TIMEOUT_SECONDS = 1200.0
 
 #: Subprocess-only env override carrying the per-run OpenCode config. The value
 #: is the JSON runtime config (normalized MCP + deny-by-default permissions). It
@@ -250,6 +250,11 @@ class OpenCodeAgentAdapter:
     missing final text, invalid paths/config, duplicate MCP names, policy
     misconfiguration) raise an :class:`AgentAdapterError` subclass so the Runner
     records a truthful failed run.
+
+    ``audit_stream_path`` (opt-in) atomically persists the raw NDJSON event
+    stream (per-step tool calls, token usage, timestamps) to the given file
+    before parsing. It is written to the run directory only and is intended for
+    diagnosing per-step cost variance; it is never enabled by default.
     """
 
     def __init__(
@@ -272,6 +277,7 @@ class OpenCodeAgentAdapter:
         pure: bool = True,
         allowed_builtins: Mapping[str, Sequence[str]] | None = None,
         extra_args: Sequence[str] = (),
+        audit_stream_path: str | Path | None = None,
     ) -> None:
         if prompt is None and prompt_loader is None:
             raise AgentAdapterError("either prompt or prompt_loader must be provided")
@@ -289,6 +295,9 @@ class OpenCodeAgentAdapter:
         self._auto_approve = auto_approve
         self._pure = pure
         self._extra_args = tuple(extra_args)
+        self._audit_stream_path = (
+            Path(audit_stream_path) if audit_stream_path is not None else None
+        )
 
         self._skill_text = skill_text
         if skill_file is not None:
@@ -372,6 +381,14 @@ class OpenCodeAgentAdapter:
             OPENCODE_DISABLE_PROJECT_CONFIG_ENV: "true",
         }
         stdout, stderr, returncode = self._run_subprocess(argv, env_extra)
+
+        # Optional raw NDJSON audit capture: saved BEFORE parsing so even a
+        # parse failure leaves the full event stream on disk for diagnosis.
+        # This is an opt-in audit artifact (per-step tool/token/timing data),
+        # never enabled by default; the raw stream can contain the prompt and
+        # tool arguments, so it is written only to the run directory.
+        if self._audit_stream_path is not None:
+            self._save_audit_stream(stdout)
 
         if returncode != 0:
             raise AgentNonZeroExitError(
@@ -751,6 +768,26 @@ class OpenCodeAgentAdapter:
         tools[tid] = (name, _tool_completed(part))
 
     # -- Subprocess execution ------------------------------------------------ #
+
+    def _save_audit_stream(self, stdout: str) -> None:
+        """Atomically persist the raw NDJSON event stream for diagnosis.
+
+        Opt-in (``audit_stream_path`` constructor arg). Written as bytes so the
+        UTF-8 content round-trips exactly; an I/O failure is raised as an
+        :class:`AgentAdapterError` so a failed audit capture surfaces truthfully
+        rather than silently dropping the diagnostic artifact.
+        """
+        try:
+            self._audit_stream_path.parent.mkdir(parents=True, exist_ok=True)
+            tmp = self._audit_stream_path.with_name(
+                self._audit_stream_path.name + ".tmp"
+            )
+            tmp.write_bytes(stdout.encode("utf-8"))
+            tmp.replace(self._audit_stream_path)
+        except OSError as exc:
+            raise AgentAdapterError(
+                f"failed to write audit stream to {self._audit_stream_path!r}: {exc}"
+            ) from exc
 
     def _run_subprocess(
         self, argv: list[str], env_extra: Mapping[str, str]

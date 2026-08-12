@@ -50,6 +50,7 @@ This module is the reusable callable API; the CLI subcommand in
 from __future__ import annotations
 
 import json
+import os
 import re
 from dataclasses import dataclass, field
 from importlib.resources import files
@@ -1074,6 +1075,12 @@ def _default_adapter_factory(run: PlannedRun, plan: DispatchPlan) -> AgentAdapte
         opencode_patterns = (
             OpenCodeToolNamePatterns(graph=()) if run.tool_policy == "grep" else None
         )
+        # Opt-in per-step NDJSON audit capture (diagnostic, off by default).
+        # When OPENCODE_AUDIT_STREAM=1 the raw event stream is persisted to the
+        # run directory as opencode-stream.ndjson for per-step cost analysis.
+        audit_stream_path = None
+        if os.environ.get("OPENCODE_AUDIT_STREAM") == "1" and runtime.runs_root is not None:
+            audit_stream_path = runtime.runs_root / run.run_id / "opencode-stream.ndjson"
         return OpenCodeAgentAdapter(
             prompt=plan.case_prompt,
             case_id=run.identity.case_id,
@@ -1085,6 +1092,7 @@ def _default_adapter_factory(run: PlannedRun, plan: DispatchPlan) -> AgentAdapte
             skill_text=skill_text,
             skill_file=skill_file,
             tool_name_patterns=opencode_patterns,
+            audit_stream_path=audit_stream_path,
         )
 
     if runtime.agent_adapter != DEFAULT_AGENT_ADAPTER:

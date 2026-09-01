@@ -134,7 +134,10 @@ def run_judge_phase(
 ) -> None:
     """Run the Judge + consensus + scoring phase for all awaiting-judge runs."""
     config = _load_yaml(config_path)
-    repo_root = config_path.resolve().parent.parent
+    # Repo root is resolved from this script's own location (scripts/ -> repo)
+    # so configs nested deeper than experiments/ (e.g. experiments/opencode/)
+    # still resolve their relative case/GT paths correctly.
+    repo_root = REPO_ROOT
 
     case = _load_yaml(repo_root / config["case"])
     ground_truth = _load_yaml(repo_root / config["ground_truth"])
